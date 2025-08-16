@@ -1,9 +1,4 @@
 {
-  "functions": {
-    "src/**/*.js": {
-      "runtime": "@vercel/node@2"
-    }
-  },
   "headers": [
     {
       "source": "/(.*)",
