@@ -1,12 +1,12 @@
 ﻿import React, { useState, useRef, useEffect } from 'react';
-import { Send, Download, FileText, FileSpreadsheet, Bot, User, Loader2 } from 'lucide-react';
+import { Send, Download, FileText, FileSpreadsheet, User, Loader2 } from 'lucide-react';
 
 const MedicalResearchGini = () => {
   const [messages, setMessages] = useState([
     {
       id: 1,
       type: 'bot',
-      content: 'Hello! I\'m Gini, your AI-powered medical research assistant from Alpha Medical Research. Our mission is to advance healthcare through cutting-edge AI innovation, transforming medical research one discovery at a time. How can I assist you with your research today?',
+      content: 'Hello! I\'m Dr. Gini, your AI-powered medical research specialist from Alpha Medical Research. Our mission is to advance healthcare through cutting-edge AI innovation, transforming medical research one discovery at a time. How can I assist you with your research today?',
       timestamp: new Date(),
     }
   ]);
@@ -94,7 +94,7 @@ const MedicalResearchGini = () => {
       .filter(msg => msg.type !== 'bot' || !msg.isError)
       .map(msg => {
         const timestamp = new Date(msg.timestamp).toLocaleString();
-        const sender = msg.type === 'user' ? 'User' : 'Medical Research Gini';
+        const sender = msg.type === 'user' ? 'User' : 'Dr. Gini (Medical Research Specialist)';
         return `[${timestamp}] ${sender}: ${msg.content}`;
       })
       .join('\n\n');
@@ -126,7 +126,7 @@ End of Conversation
       .filter(msg => msg.type !== 'bot' || !msg.isError)
       .map(msg => {
         const timestamp = new Date(msg.timestamp).toLocaleString();
-        const sender = msg.type === 'user' ? 'User' : 'Medical Research Gini';
+        const sender = msg.type === 'user' ? 'User' : 'Dr. Gini (Medical Research Specialist)';
         return `[${timestamp}] ${sender}: ${msg.content}`;
       })
       .join('\n\n');
@@ -159,7 +159,7 @@ End of Conversation
       .filter(msg => msg.type !== 'bot' || !msg.isError)
       .map(msg => {
         const timestamp = new Date(msg.timestamp).toLocaleString();
-        const sender = msg.type === 'user' ? 'User' : 'Medical Research Gini';
+        const sender = msg.type === 'user' ? 'User' : 'Dr. Gini (Medical Research Specialist)';
         const content = msg.content.replace(/"/g, '""');
         return `"${timestamp}","${sender}","${content}"`;
       })
@@ -262,17 +262,25 @@ End of Conversation
           >
             <div className={`flex space-x-3 max-w-3xl ${message.type === 'user' ? 'flex-row-reverse space-x-reverse' : ''}`}>
               {/* Avatar */}
-              <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
+              <div className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center ${
                 message.type === 'user' 
-                  ? 'bg-blue-600' 
+                  ? 'bg-gradient-to-br from-blue-600 to-blue-700 shadow-md' 
                   : message.isError 
-                    ? 'bg-red-500' 
-                    : 'bg-green-600'
+                    ? 'bg-gradient-to-br from-red-500 to-red-600 shadow-md' 
+                    : 'bg-gradient-to-br from-green-600 to-emerald-700 shadow-md border-2 border-white'
               }`}>
                 {message.type === 'user' ? (
-                  <User className="w-4 h-4 text-white" />
+                  <User className="w-5 h-5 text-white" />
                 ) : (
-                  <Bot className="w-4 h-4 text-white" />
+                  <div className="w-6 h-6 bg-white rounded-full flex items-center justify-center">
+                    <svg width="16" height="16" viewBox="0 0 24 24" className="w-4 h-4">
+                      {/* Medical stethoscope icon */}
+                      <path d="M19 8c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm0-3c-.55 0-1 .45-1 1s.45 1 1 1 1-.45 1-1-.45-1-1-1z" fill="#1e40af"/>
+                      <path d="M16 4.5c0-.28-.22-.5-.5-.5s-.5.22-.5.5V11c0 2.76-2.24 5-5 5s-5-2.24-5-5V4.5c0-.28-.22-.5-.5-.5S4 4.22 4 4.5V11c0 3.31 2.69 6 6 6s6-2.69 6-6V4.5z" fill="#1e40af"/>
+                      <circle cx="7" cy="4" r="2" fill="#10b981"/>
+                      <circle cx="13" cy="4" r="2" fill="#10b981"/>
+                    </svg>
+                  </div>
                 )}
               </div>
 
@@ -299,14 +307,21 @@ End of Conversation
         {isLoading && (
           <div className="flex justify-start">
             <div className="flex space-x-3 max-w-3xl">
-              <div className="flex-shrink-0 w-8 h-8 rounded-full bg-green-600 flex items-center justify-center">
-                <Bot className="w-4 h-4 text-white" />
+              <div className="flex-shrink-0 w-10 h-10 rounded-full bg-gradient-to-br from-green-600 to-emerald-700 shadow-md border-2 border-white flex items-center justify-center">
+                <div className="w-6 h-6 bg-white rounded-full flex items-center justify-center">
+                  <svg width="16" height="16" viewBox="0 0 24 24" className="w-4 h-4">
+                    <path d="M19 8c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm0-3c-.55 0-1 .45-1 1s.45 1 1 1 1-.45 1-1-.45-1-1-1z" fill="#1e40af"/>
+                    <path d="M16 4.5c0-.28-.22-.5-.5-.5s-.5.22-.5.5V11c0 2.76-2.24 5-5 5s-5-2.24-5-5V4.5c0-.28-.22-.5-.5-.5S4 4.22 4 4.5V11c0 3.31 2.69 6 6 6s6-2.69 6-6V4.5z" fill="#1e40af"/>
+                    <circle cx="7" cy="4" r="2" fill="#10b981"/>
+                    <circle cx="13" cy="4" r="2" fill="#10b981"/>
+                  </svg>
+                </div>
               </div>
               <div className="flex flex-col items-start">
-                <div className="px-4 py-3 rounded-lg bg-white border border-gray-200">
+                <div className="px-4 py-3 rounded-lg bg-white border border-gray-200 shadow-sm">
                   <div className="flex items-center space-x-2">
-                    <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
-                    <span className="text-gray-600">Analyzing your research query...</span>
+                    <Loader2 className="w-4 h-4 animate-spin text-emerald-600" />
+                    <span className="text-gray-600">Dr. Gini is analyzing your research query...</span>
                   </div>
                 </div>
               </div>
