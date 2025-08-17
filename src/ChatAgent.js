@@ -6,7 +6,7 @@ const MedicalResearchGini = () => {
     {
       id: 1,
       type: 'bot',
-      content: 'Hello! I\'m Dr. Gini, your AI-powered medical research specialist from Alpha Medical Research. Our mission is to advance healthcare through cutting-edge AI innovation, transforming medical research one discovery at a time. How can I assist you with your research today?',
+      content: 'Hello! I\'m Dr. Gini, your AI-powered drug discovery specialist from PharmaTech Innovations. I specialize in early-stage drug discovery, from target identification to lead optimization. How can I assist you with your drug discovery research today?',
       timestamp: new Date(),
     }
   ]);
@@ -57,26 +57,62 @@ const MedicalResearchGini = () => {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
+      // Check if response is JSON
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        throw new Error('Response is not JSON format');
+      }
+
       const data = await response.json();
+      
+      // Handle different response formats
+      let responseText = '';
+      if (data.response) {
+        responseText = data.response;
+      } else if (data.message) {
+        responseText = data.message;
+      } else if (data.text) {
+        responseText = data.text;
+      } else if (typeof data === 'string') {
+        responseText = data;
+      } else {
+        responseText = 'I received your message successfully.';
+      }
+
+      // Truncate if too long (frontend safety)
+      if (responseText.length > 8000) {
+        responseText = responseText.substring(0, 8000) + '\n\n[Response truncated for display]';
+      }
       
       const botMessage = {
         id: Date.now() + 1,
         type: 'bot',
-        content: data.response || data.message || data.text || 'I received your message successfully.',
+        content: responseText,
         timestamp: new Date(),
+        truncated: data.truncated || false
       };
 
       setMessages(prev => [...prev, botMessage]);
     } catch (error) {
       console.error('Error sending message:', error);
-      const errorMessage = {
+      let errorMessage = 'Sorry, I\'m having trouble processing your request. ';
+      
+      if (error.message.includes('JSON')) {
+        errorMessage += 'There was a formatting issue with the response. Please try a shorter query.';
+      } else if (error.message.includes('timeout')) {
+        errorMessage += 'The request timed out. Please try breaking your query into smaller parts.';
+      } else {
+        errorMessage += 'Please check your connection and try again.';
+      }
+
+      const errorMsg = {
         id: Date.now() + 1,
         type: 'bot',
-        content: 'Sorry, I\'m having trouble connecting to the server. Please check your connection and try again.',
+        content: errorMessage,
         timestamp: new Date(),
         isError: true
       };
-      setMessages(prev => [...prev, errorMessage]);
+      setMessages(prev => [...prev, errorMsg]);
     } finally {
       setIsLoading(false);
     }
@@ -94,13 +130,13 @@ const MedicalResearchGini = () => {
       .filter(msg => msg.type !== 'bot' || !msg.isError)
       .map(msg => {
         const timestamp = new Date(msg.timestamp).toLocaleString();
-        const sender = msg.type === 'user' ? 'User' : 'Dr. Gini (Medical Research Specialist)';
+        const sender = msg.type === 'user' ? 'Researcher' : 'Dr. Gini (Drug Discovery Specialist)';
         return `[${timestamp}] ${sender}: ${msg.content}`;
       })
       .join('\n\n');
 
-    const content = `Alpha Medical Research - Medical Research Gini
-Chat Conversation Export
+    const content = `PharmaTech Innovations - DrugDiscovery AI
+Drug Discovery Research Session Export
 Generated on: ${new Date().toLocaleString()}
 Total Messages: ${messages.length}
 
@@ -109,13 +145,13 @@ ${'='.repeat(50)}
 ${chatContent}
 
 ${'='.repeat(50)}
-End of Conversation
-© Alpha Medical Research`;
+End of Drug Discovery Session
+© PharmaTech Innovations`;
 
     const element = document.createElement('a');
     const file = new Blob([content], { type: 'text/plain' });
     element.href = URL.createObjectURL(file);
-    element.download = `alpha-medical-research-gini-${Date.now()}.txt`;
+    element.download = `pharmatech-drugdiscovery-${Date.now()}.txt`;
     document.body.appendChild(element);
     element.click();
     document.body.removeChild(element);
@@ -126,13 +162,13 @@ End of Conversation
       .filter(msg => msg.type !== 'bot' || !msg.isError)
       .map(msg => {
         const timestamp = new Date(msg.timestamp).toLocaleString();
-        const sender = msg.type === 'user' ? 'User' : 'Dr. Gini (Medical Research Specialist)';
+        const sender = msg.type === 'user' ? 'Researcher' : 'Dr. Gini (Drug Discovery Specialist)';
         return `[${timestamp}] ${sender}: ${msg.content}`;
       })
       .join('\n\n');
 
-    const content = `Alpha Medical Research - Medical Research Gini
-Chat Conversation Export
+    const content = `PharmaTech Innovations - DrugDiscovery AI
+Drug Discovery Research Session Export
 Generated on: ${new Date().toLocaleString()}
 Total Messages: ${messages.length}
 
@@ -141,13 +177,13 @@ ${'='.repeat(50)}
 ${chatContent}
 
 ${'='.repeat(50)}
-End of Conversation
-© Alpha Medical Research`;
+End of Drug Discovery Session
+© PharmaTech Innovations`;
 
     const element = document.createElement('a');
     const file = new Blob([content], { type: 'application/msword' });
     element.href = URL.createObjectURL(file);
-    element.download = `alpha-medical-research-gini-${Date.now()}.doc`;
+    element.download = `pharmatech-drugdiscovery-${Date.now()}.doc`;
     document.body.appendChild(element);
     element.click();
     document.body.removeChild(element);
@@ -159,7 +195,7 @@ End of Conversation
       .filter(msg => msg.type !== 'bot' || !msg.isError)
       .map(msg => {
         const timestamp = new Date(msg.timestamp).toLocaleString();
-        const sender = msg.type === 'user' ? 'User' : 'Dr. Gini (Medical Research Specialist)';
+        const sender = msg.type === 'user' ? 'Researcher' : 'Dr. Gini (Drug Discovery Specialist)';
         const content = msg.content.replace(/"/g, '""');
         return `"${timestamp}","${sender}","${content}"`;
       })
@@ -170,7 +206,7 @@ End of Conversation
     const element = document.createElement('a');
     const file = new Blob([fullCsvContent], { type: 'text/csv' });
     element.href = URL.createObjectURL(file);
-    element.download = `alpha-medical-research-gini-${Date.now()}.csv`;
+    element.download = `pharmatech-drugdiscovery-${Date.now()}.csv`;
     document.body.appendChild(element);
     element.click();
     document.body.removeChild(element);
@@ -185,21 +221,21 @@ End of Conversation
       {/* Header */}
       <div className="bg-gradient-to-r from-blue-900 to-blue-800 shadow-lg border-b px-6 py-4">
         <div className="flex items-center space-x-4">
-          {/* Logo - Bigger, more stylish and crisp */}
+          {/* Logo - Drug Discovery focused design */}
           <svg width="64" height="64" viewBox="0 0 120 120" className="w-16 h-16">
             {/* Outer gradient ring */}
             <defs>
               <linearGradient id="logoGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stopColor="#3b82f6" />
-                <stop offset="50%" stopColor="#1e40af" />
-                <stop offset="100%" stopColor="#1e3a8a" />
+                <stop offset="0%" stopColor="#7c3aed" />
+                <stop offset="50%" stopColor="#5b21b6" />
+                <stop offset="100%" stopColor="#4c1d95" />
               </linearGradient>
-              <linearGradient id="crossGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stopColor="#ffffff" />
-                <stop offset="100%" stopColor="#f8fafc" />
+              <linearGradient id="moleculeGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#06b6d4" />
+                <stop offset="100%" stopColor="#0891b2" />
               </linearGradient>
               <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
-                <feDropShadow dx="2" dy="2" stdDeviation="3" floodColor="#1e40af" floodOpacity="0.3"/>
+                <feDropShadow dx="2" dy="2" stdDeviation="3" floodColor="#5b21b6" floodOpacity="0.3"/>
               </filter>
             </defs>
             
@@ -207,48 +243,56 @@ End of Conversation
             <circle cx="60" cy="60" r="56" fill="url(#logoGradient)" filter="url(#shadow)" />
             <circle cx="60" cy="60" r="50" fill="white" />
             
-            {/* Medical Cross - more prominent */}
-            <rect x="50" y="20" width="20" height="80" fill="url(#crossGradient)" rx="3" stroke="#1e40af" strokeWidth="1" />
-            <rect x="20" y="50" width="80" height="20" fill="url(#crossGradient)" rx="3" stroke="#1e40af" strokeWidth="1" />
-            
-            {/* DNA Double Helix - more detailed */}
-            <g stroke="#10b981" strokeWidth="3" fill="none" opacity="0.8">
-              {/* Left strand */}
-              <path d="M25 25 Q35 35 45 25 T65 25 M25 45 Q35 55 45 45 T65 45 M25 65 Q35 75 45 65 T65 65" strokeLinecap="round" />
-              {/* Right strand */}
-              <path d="M55 75 Q65 85 75 75 T95 75 M55 95 Q65 105 75 95 T95 95" strokeLinecap="round" />
-              {/* Connecting bonds - more detailed */}
-              <line x1="30" y1="30" x2="40" y2="40" stroke="#6b7280" strokeWidth="2" strokeLinecap="round" opacity="0.6" />
-              <line x1="50" y1="40" x2="60" y2="30" stroke="#6b7280" strokeWidth="2" strokeLinecap="round" opacity="0.6" />
-              <line x1="60" y1="80" x2="70" y2="90" stroke="#6b7280" strokeWidth="2" strokeLinecap="round" opacity="0.6" />
-              <line x1="80" y1="90" x2="90" y2="80" stroke="#6b7280" strokeWidth="2" strokeLinecap="round" opacity="0.6" />
+            {/* Central drug molecule structure */}
+            <g stroke="#5b21b6" strokeWidth="2" fill="none">
+              {/* Benzene ring */}
+              <polygon points="60,30 75,40 75,60 60,70 45,60 45,40" stroke="#5b21b6" strokeWidth="2" fill="none" />
+              {/* Side chains */}
+              <line x1="75" y1="40" x2="90" y2="35" strokeLinecap="round" />
+              <line x1="75" y1="60" x2="90" y2="65" strokeLinecap="round" />
+              <line x1="45" y1="40" x2="30" y2="35" strokeLinecap="round" />
+              <line x1="45" y1="60" x2="30" y2="65" strokeLinecap="round" />
             </g>
             
-            {/* Research Molecules - more stylish */}
-            <circle cx="30" cy="90" r="4" fill="#ef4444" stroke="#dc2626" strokeWidth="1" />
-            <circle cx="90" cy="30" r="4" fill="#ef4444" stroke="#dc2626" strokeWidth="1" />
-            <circle cx="95" cy="45" r="3" fill="#f59e0b" stroke="#d97706" strokeWidth="1" />
-            <circle cx="25" cy="105" r="3" fill="#f59e0b" stroke="#d97706" strokeWidth="1" />
-            <circle cx="40" cy="85" r="2.5" fill="#8b5cf6" stroke="#7c3aed" strokeWidth="1" />
-            <circle cx="80" cy="35" r="2.5" fill="#8b5cf6" stroke="#7c3aed" strokeWidth="1" />
+            {/* Drug compound atoms */}
+            <circle cx="60" cy="30" r="4" fill="#ef4444" stroke="#dc2626" strokeWidth="1" />
+            <circle cx="75" cy="40" r="3" fill="#3b82f6" stroke="#2563eb" strokeWidth="1" />
+            <circle cx="75" cy="60" r="3" fill="#10b981" stroke="#059669" strokeWidth="1" />
+            <circle cx="60" cy="70" r="4" fill="#f59e0b" stroke="#d97706" strokeWidth="1" />
+            <circle cx="45" cy="60" r="3" fill="#8b5cf6" stroke="#7c3aed" strokeWidth="1" />
+            <circle cx="45" cy="40" r="3" fill="#ec4899" stroke="#db2777" strokeWidth="1" />
             
-            {/* Molecular bonds - enhanced */}
-            <line x1="30" y1="90" x2="25" y2="105" stroke="#6b7280" strokeWidth="2" strokeLinecap="round" opacity="0.7" />
-            <line x1="90" y1="30" x2="95" y2="45" stroke="#6b7280" strokeWidth="2" strokeLinecap="round" opacity="0.7" />
-            <line x1="40" y1="85" x2="30" y2="90" stroke="#6b7280" strokeWidth="1.5" strokeLinecap="round" opacity="0.5" />
-            <line x1="80" y1="35" x2="90" y2="30" stroke="#6b7280" strokeWidth="1.5" strokeLinecap="round" opacity="0.5" />
+            {/* Terminal functional groups */}
+            <circle cx="90" cy="35" r="2.5" fill="#06b6d4" stroke="#0891b2" strokeWidth="1" />
+            <circle cx="90" cy="65" r="2.5" fill="#84cc16" stroke="#65a30d" strokeWidth="1" />
+            <circle cx="30" cy="35" r="2.5" fill="#f97316" stroke="#ea580c" strokeWidth="1" />
+            <circle cx="30" cy="65" r="2.5" fill="#6366f1" stroke="#4f46e5" strokeWidth="1" />
             
-            {/* Company Initials - more prominent */}
-            <text x="60" y="65" fontFamily="Arial, sans-serif" fontSize="16" fontWeight="bold" textAnchor="middle" fill="#1e40af">A</text>
-            <text x="60" y="78" fontFamily="Arial, sans-serif" fontSize="8" fontWeight="bold" textAnchor="middle" fill="#1e40af" opacity="0.8">MR</text>
+            {/* Activity indicator */}
+            <g stroke="url(#moleculeGradient)" strokeWidth="1.5" fill="none" opacity="0.6">
+              <circle cx="60" cy="60" r="25" strokeDasharray="3,3">
+                <animateTransform
+                  attributeName="transform"
+                  attributeType="XML"
+                  type="rotate"
+                  from="0 60 60"
+                  to="360 60 60"
+                  dur="8s"
+                  repeatCount="indefinite"/>
+              </circle>
+            </g>
+            
+            {/* Company Initials */}
+            <text x="60" y="95" fontFamily="Arial, sans-serif" fontSize="14" fontWeight="bold" textAnchor="middle" fill="#5b21b6">PT</text>
+            <text x="60" y="108" fontFamily="Arial, sans-serif" fontSize="6" fontWeight="bold" textAnchor="middle" fill="#5b21b6" opacity="0.8">INNOVATIONS</text>
             
             {/* Subtle glow effect */}
-            <circle cx="60" cy="60" r="50" fill="none" stroke="rgba(59, 130, 246, 0.3)" strokeWidth="2" />
+            <circle cx="60" cy="60" r="50" fill="none" stroke="rgba(123, 58, 237, 0.3)" strokeWidth="2" />
           </svg>
           <div>
-            <h1 className="text-xl font-bold text-white">Medical Research Gini</h1>
-            <p className="text-sm text-blue-100">Alpha Medical Research • Advancing Healthcare Through AI Innovation</p>
-            <p className="text-xs text-blue-200 mt-1">"Transforming Medical Research, One Discovery at a Time"</p>
+            <h1 className="text-xl font-bold text-white">DrugDiscovery AI</h1>
+            <p className="text-sm text-blue-100">PharmaTech Innovations • Accelerating Early-Stage Drug Discovery</p>
+            <p className="text-xs text-blue-200 mt-1">"From Molecules to Medicine: AI-Powered Discovery Pipeline"</p>
           </div>
         </div>
       </div>
@@ -340,7 +384,7 @@ End of Conversation
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-2">
                 <Download className="w-4 h-4 text-gray-600" />
-                <span className="text-sm font-medium text-gray-700">Download Research Session</span>
+                <span className="text-sm font-medium text-gray-700">Download Discovery Session</span>
               </div>
               <div className="flex space-x-2">
                 <button
@@ -376,7 +420,7 @@ End of Conversation
               value={inputMessage}
               onChange={(e) => setInputMessage(e.target.value)}
               onKeyPress={handleKeyPress}
-              placeholder="Ask me about medical research, studies, protocols, or any research-related queries..."
+              placeholder="Ask me about drug targets, compound optimization, ADMET properties, clinical trials, or any drug discovery questions..."
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
               rows="1"
               style={{ minHeight: '50px', maxHeight: '120px' }}
@@ -399,7 +443,7 @@ End of Conversation
         
         {/* Connection Status */}
         <div className="mt-2 text-xs text-gray-500 text-center">
-          <span>🔬 Connected to Alpha Medical Research Systems</span>
+          <span>🧬 Connected to PharmaTech Discovery Systems</span>
         </div>
       </div>
     </div>
