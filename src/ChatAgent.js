@@ -82,54 +82,51 @@ const MedicalResearchGini = () => {
       .trim();
   };
 
-  // Response Processing - HANDLE JSON WITH HTML CONTENT
+  // Response Processing - FIXED STREAM READING ISSUE
   const processResponse = async (response) => {
     console.log('🔍 Processing response...');
     console.log('Response status:', response.status);
     console.log('Response headers:', Object.fromEntries(response.headers.entries()));
 
     try {
-      // Try JSON first
-      const responseData = await response.json();
-      console.log('✅ Parsed JSON response:', responseData);
-      
-      // Extract the AI response
-      let aiResponse = responseData.response || 
-                      responseData.output || 
-                      responseData.message || 
-                      'No response content found';
+      // Read the response only once
+      const responseText = await response.text();
+      console.log('✅ Response text length:', responseText.length);
+      console.log('✅ Response preview:', responseText.substring(0, 300) + '...');
 
       // Validate the response
-      if (!aiResponse || (typeof aiResponse === 'string' && aiResponse.trim() === '')) {
-        throw new Error('Empty response content received');
+      if (!responseText || responseText.trim() === '') {
+        throw new Error('Empty response received');
       }
 
-      console.log('✅ Final AI response (first 200 chars):', String(aiResponse).substring(0, 200) + '...');
-      return aiResponse;
-
-    } catch (jsonError) {
-      console.log('⚠️ JSON parsing failed, trying text...');
-      
+      // Try to parse as JSON first
       try {
-        // Fallback to text response
-        const textResponse = await response.text();
-        console.log('📝 Text response length:', textResponse.length);
+        const responseData = JSON.parse(responseText);
+        console.log('✅ Parsed as JSON successfully');
         
-        if (textResponse && textResponse.trim() !== '') {
-          return textResponse;
-        } else {
-          throw new Error('Empty text response');
-        }
-      } catch (textError) {
-        console.error('❌ Both JSON and text parsing failed:', textError);
-        return `
-          <div style="color: #dc2626; background: #fef2f2; padding: 12px; border-radius: 6px; border: 1px solid #fecaca;">
-            <strong>Response Processing Error</strong><br/>
-            Unable to process the response. Please try again.
-            <br/><small>Status: ${response.status}</small>
-          </div>
-        `;
+        // Extract the AI response from JSON
+        const aiResponse = responseData.response || 
+                          responseData.content || 
+                          responseData.output || 
+                          responseData.message || 
+                          'No response content found';
+        
+        return aiResponse;
+      } catch (jsonError) {
+        console.log('⚠️ Not JSON, treating as HTML/text');
+        // If not JSON, treat as HTML/text directly
+        return responseText;
       }
+
+    } catch (readError) {
+      console.error('❌ Error reading response:', readError);
+      return `
+        <div style="color: #dc2626; background: #fef2f2; padding: 12px; border-radius: 6px; border: 1px solid #fecaca;">
+          <strong>Response Processing Error</strong><br/>
+          Unable to read the response. Please try again.
+          <br/><small>Status: ${response.status}</small>
+        </div>
+      `;
     }
   };
 
@@ -183,23 +180,16 @@ const MedicalResearchGini = () => {
         url: response.url
       });
 
-      if (!response.ok) {
-        // Log the error response body for debugging
-        let errorText = '';
-        try {
-          errorText = await response.text();
-          console.error('❌ Error response body:', errorText);
-        } catch (e) {
-          console.error('❌ Could not read error response');
-        }
-        
-        // Handle specific error codes
+      if (!response.ok) {        
+        // Handle specific error codes without reading the body again
         if (response.status === 500) {
-          throw new Error(`Server error: The webhook encountered an internal error. Please check your n8n workflow configuration.`);
+          throw new Error(`Server error (500): The webhook encountered an internal error. Please check your n8n workflow configuration.`);
         } else if (response.status === 404) {
-          throw new Error(`Webhook not found: Please verify your webhook URL is correct.`);
+          throw new Error(`Webhook not found (404): Please verify your webhook URL is correct.`);
+        } else if (response.status === 405) {
+          throw new Error(`Method not allowed (405): Please check your webhook accepts POST requests.`);
         } else {
-          throw new Error(`HTTP error! status: ${response.status} - ${response.statusText}. ${errorText ? 'Response: ' + errorText : ''}`);
+          throw new Error(`HTTP error! status: ${response.status} - ${response.statusText}`);
         }
       }
 
