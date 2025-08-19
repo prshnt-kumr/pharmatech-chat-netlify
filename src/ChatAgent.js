@@ -82,33 +82,148 @@ const MedicalResearchGini = () => {
       .trim();
   };
 
-  // Response Processing - HANDLE DIRECT HTML TEXT RESPONSE
+  // Response Processing - UNIVERSAL FORMAT HANDLER
   const processResponse = async (response) => {
-    console.log('🔍 Processing direct HTML text response...');
+    console.log('🔍 ===== UNIVERSAL RESPONSE PROCESSOR =====');
     console.log('Response status:', response.status);
     console.log('Response headers:', Object.fromEntries(response.headers.entries()));
+    
+    const contentType = response.headers.get('content-type') || '';
+    console.log('Content-Type:', contentType);
 
     try {
-      // Get response as text since webhook returns HTML directly
-      const htmlContent = await response.text();
-      console.log('✅ HTML response length:', htmlContent.length);
-      console.log('✅ HTML content preview:', htmlContent.substring(0, 400) + '...');
+      // Get raw response text first
+      const rawText = await response.text();
+      console.log('📥 Raw response length:', rawText.length);
+      console.log('📥 Raw response preview:', rawText.substring(0, 200) + '...');
 
-      // Validate we have content
-      if (!htmlContent || htmlContent.trim().length < 20) {
-        console.warn('⚠️ HTML content is too short');
+      let finalHtml = '';
+
+      // AUTO-DETECT FORMAT AND PROCESS ACCORDINGLY
+      
+      // 1. Try JSON first (handles schema, json mode)
+      if (rawText.trim().startsWith('{') || rawText.trim().startsWith('[')) {
+        console.log('🎯 AUTO-DETECTED: JSON format');
+        try {
+          const jsonData = JSON.parse(rawText);
+          console.log('📦 JSON structure:', Object.keys(jsonData));
+          
+          // Handle different JSON structures
+          if (Array.isArray(jsonData)) {
+            console.log('📋 JSON Array detected');
+            if (jsonData.length > 0) {
+              const firstItem = jsonData[0];
+              finalHtml = firstItem.output || firstItem.response || firstItem.content || firstItem.message || '';
+            }
+          } else if (typeof jsonData === 'object') {
+            console.log('📋 JSON Object detected');
+            finalHtml = jsonData.output || 
+                       jsonData.response || 
+                       jsonData.content || 
+                       jsonData.message || 
+                       jsonData.safeResponse ||
+                       jsonData.text ||
+                       jsonData.data ||
+                       JSON.stringify(jsonData, null, 2);
+          }
+          
+          console.log('✅ Extracted from JSON, length:', finalHtml.length);
+        } catch (jsonError) {
+          console.log('⚠️ JSON parsing failed:', jsonError.message);
+          finalHtml = rawText; // Fallback to raw text
+        }
+      }
+      
+      // 2. Check for direct HTML (table mode)
+      else if (rawText.includes('<h2>') || rawText.includes('<h3>') || rawText.includes('<p>')) {
+        console.log('🎯 AUTO-DETECTED: Direct HTML format (table mode)');
+        finalHtml = rawText;
+      }
+      
+      // 3. Check for iframe wrapped content (YOUR EXACT FORMAT)
+      else if (rawText.includes('<iframe') && rawText.includes('srcdoc=')) {
+        console.log('🎯 AUTO-DETECTED: Iframe wrapped HTML (n8n format)');
+        
+        // Extract content from srcdoc attribute - handles both quoted and unquoted
+        const iframeMatch = rawText.match(/<iframe[^>]*srcdoc=["']([^"']*?)["'][^>]*>/is) || 
+                           rawText.match(/<iframe[^>]*srcdoc=([^>]*?)[\s>]/is);
+        
+        if (iframeMatch) {
+          let extractedContent = iframeMatch[1];
+          console.log('📦 Raw srcdoc content length:', extractedContent.length);
+          
+          // Decode HTML entities that are commonly escaped in srcdoc
+          extractedContent = extractedContent
+            .replace(/&quot;/g, '"')
+            .replace(/&#34;/g, '"')
+            .replace(/&apos;/g, "'")
+            .replace(/&#39;/g, "'")
+            .replace(/&lt;/g, '<')
+            .replace(/&#60;/g, '<')
+            .replace(/&gt;/g, '>')
+            .replace(/&#62;/g, '>')
+            .replace(/&amp;/g, '&')
+            .replace(/&#38;/g, '&')
+            .replace(/&nbsp;/g, ' ')
+            .replace(/&#160;/g, ' ');
+          
+          console.log('✅ Extracted and decoded iframe content');
+          console.log('📝 Content preview:', extractedContent.substring(0, 200) + '...');
+          finalHtml = extractedContent;
+        } else {
+          console.log('⚠️ iframe detected but srcdoc extraction failed');
+          finalHtml = rawText; // Fallback to raw text
+        }
+      }
+      
+      // 4. Plain text fallback
+      else {
+        console.log('🎯 AUTO-DETECTED: Plain text format');
+        finalHtml = rawText;
+      }
+
+      // PROCESS ESCAPED CHARACTERS (common in all formats)
+      if (typeof finalHtml === 'string') {
+        // Handle escaped newlines
+        if (finalHtml.includes('\\n')) {
+          console.log('🔄 Converting escaped newlines');
+          finalHtml = finalHtml.replace(/\\n/g, '\n');
+        }
+        
+        // Handle escaped quotes
+        if (finalHtml.includes('\\"')) {
+          console.log('🔄 Converting escaped quotes');
+          finalHtml = finalHtml.replace(/\\"/g, '"');
+        }
+        
+        // Handle unicode escapes
+        if (finalHtml.includes('\\u')) {
+          console.log('🔄 Converting unicode escapes');
+          finalHtml = finalHtml.replace(/\\u([0-9a-fA-F]{4})/g, (match, code) => {
+            return String.fromCharCode(parseInt(code, 16));
+          });
+        }
+      }
+
+      // VALIDATE FINAL CONTENT
+      if (!finalHtml || finalHtml.trim().length < 10) {
+        console.warn('⚠️ Final content is too short');
         return `<div style="padding: 12px; background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 6px;">
-          <p><strong>Content Issue</strong></p>
-          <p>Received HTML response but content appears to be empty or too short.</p>
+          <p><strong>Content Processing Issue</strong></p>
+          <p>Processed response but content appears empty.</p>
           <details>
-            <summary>Debug Info</summary>
-            <pre style="font-size: 11px; background: #f8f9fa; padding: 8px; margin-top: 8px; max-height: 200px; overflow-y: auto;">${htmlContent}</pre>
+            <summary>Debug - Raw Response</summary>
+            <pre style="font-size: 10px; background: #f8f9fa; padding: 8px; margin-top: 8px; max-height: 200px; overflow-y: auto;">${rawText}</pre>
+          </details>
+          <details>
+            <summary>Debug - Processed Content</summary>
+            <pre style="font-size: 10px; background: #f8f9fa; padding: 8px; margin-top: 8px; max-height: 200px; overflow-y: auto;">${finalHtml}</pre>
           </details>
         </div>`;
       }
 
-      // Clean up the HTML slightly (remove document wrappers if any)
-      const cleanedHtml = htmlContent
+      // FINAL CLEANUP
+      const cleanedHtml = finalHtml
         .replace(/^<!DOCTYPE[^>]*>/i, '')
         .replace(/^<html[^>]*>/i, '')
         .replace(/<\/html>$/i, '')
@@ -117,25 +232,23 @@ const MedicalResearchGini = () => {
         .replace(/<\/body>$/i, '')
         .trim();
 
-      console.log('✅ Cleaned HTML ready for display');
+      console.log('✅ FINAL PROCESSED HTML:');
+      console.log('   Length:', cleanedHtml.length);
+      console.log('   Preview:', cleanedHtml.substring(0, 300) + '...');
+      console.log('🔍 ===== END UNIVERSAL PROCESSOR =====');
+      
       return cleanedHtml;
 
-    } catch (readError) {
-      console.error('❌ Error reading HTML response:', readError);
-      
-      // Fallback: try JSON parsing in case format changed
-      try {
-        const jsonData = await response.json();
-        console.log('📝 Fallback: trying JSON parsing');
-        return jsonData.response || jsonData.safeResponse || jsonData.output || JSON.stringify(jsonData);
-      } catch (jsonError) {
-        console.error('❌ Both HTML and JSON parsing failed');
-        return `<div style="color: #dc2626; background: #fef2f2; padding: 12px; border-radius: 6px; border: 1px solid #fecaca;">
-          <strong>Response Processing Error</strong><br/>
-          Unable to process the response. Please try again.
-          <br/><small>Error: ${readError.message}</small>
-        </div>`;
-      }
+    } catch (error) {
+      console.error('❌ CRITICAL ERROR in universal processor:', error);
+      return `<div style="color: #dc2626; background: #fef2f2; padding: 12px; border-radius: 6px; border: 1px solid #fecaca;">
+        <strong>Universal Response Processing Error</strong><br/>
+        ${error.message}
+        <details>
+          <summary>Debug Info</summary>
+          <p>Error occurred while processing response</p>
+        </details>
+      </div>`;
     }
   };
 
