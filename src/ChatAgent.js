@@ -118,30 +118,44 @@ const MedicalResearchGini = () => {
         }
       }
 
-      // Clean up the HTML for better display
-      const cleanedHtml = htmlContent
-        // Remove any potential document wrappers
+      // Clean up the HTML for better display (gentler cleaning)
+      let cleanedHtml = htmlContent;
+      
+      // Only remove document-level wrappers, keep content elements
+      cleanedHtml = cleanedHtml
         .replace(/^<!DOCTYPE[^>]*>/i, '')
         .replace(/^<html[^>]*>/i, '')
         .replace(/<\/html>$/i, '')
         .replace(/^<head>.*?<\/head>/is, '')
         .replace(/^<body[^>]*>/i, '')
         .replace(/<\/body>$/i, '')
-        // Clean up iframe tags that might cause issues
-        .replace(/<iframe[^>]*>.*?<\/iframe>/gis, '')
-        // Ensure proper HTML structure
-        .replace(/^\s+|\s+$/g, '')
         .trim();
 
       console.log('✅ HTML cleaned and ready for display');
-      console.log('🔍 Cleaned HTML preview:', cleanedHtml.substring(0, 200) + '...');
+      console.log('🔍 Cleaned HTML length:', cleanedHtml.length);
+      console.log('🔍 Cleaned HTML preview:', cleanedHtml.substring(0, 300) + '...');
+      
+      // Check if we lost too much content during cleaning
+      if (cleanedHtml.length < htmlContent.length * 0.5) {
+        console.warn('⚠️ HTML cleaning removed too much content, using original');
+        // Use original content if cleaning removed too much
+        cleanedHtml = htmlContent;
+      }
       
       // Validate that we have actual content
-      if (cleanedHtml.length < 10) {
-        console.warn('⚠️ Cleaned HTML is very short, might be empty');
+      if (cleanedHtml.length < 50) {
+        console.warn('⚠️ Final HTML is very short');
         return `<div style="padding: 12px; background: #f3f4f6; border-radius: 6px;">
-          <p>I received a response but it appears to be empty or invalid. Please try again.</p>
-          <small>Original content length: ${htmlContent.length}</small>
+          <p><strong>Content Processing Issue</strong></p>
+          <p>I received a response but it appears to be too short after processing.</p>
+          <details>
+            <summary>Debug Info</summary>
+            <p>Original length: ${htmlContent.length}</p>
+            <p>Cleaned length: ${cleanedHtml.length}</p>
+            <div style="max-height: 200px; overflow-y: auto; background: #f9f9f9; padding: 8px; margin-top: 8px; font-family: monospace; font-size: 12px;">
+              ${htmlContent.replace(/</g, '&lt;').replace(/>/g, '&gt;')}
+            </div>
+          </details>
         </div>`;
       }
       
