@@ -16,7 +16,7 @@ const MedicalResearchGini = () => {
   const [userFeedback, setUserFeedback] = useState({});
   const messagesEndRef = useRef(null);
 
-  // Xata configuration for ZAPAL01GRP01 database
+  // Configuration
   const XATA_CONFIG = {
     baseURL: 'https://Prashant-Kumar-s-workspace-9seqfg.us-east-1.xata.sh/db/ZAPAL01GRP01:main',
     apiKey: process.env.REACT_APP_XATA_API_KEY || 'YOUR_XATA_API_KEY_HERE',
@@ -26,99 +26,12 @@ const MedicalResearchGini = () => {
     }
   };
 
-  // n8n webhook URL
   const N8N_WEBHOOK_URL = process.env.REACT_APP_N8N_WEBHOOK_URL || 'https://prshntkumrai.app.n8n.cloud/webhook/Chatbot';
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
-
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
-
-  // Add CSS styles for research content
-  useEffect(() => {
-    const style = document.createElement('style');
-    style.textContent = `
-      .research-content {
-        max-width: none !important;
-        max-height: none !important;
-        height: auto !important;
-        overflow: visible !important;
-        word-wrap: break-word;
-        overflow-wrap: break-word;
-      }
-      .research-content h2 {
-        color: #1e40af;
-        font-size: 18px;
-        font-weight: bold;
-        margin: 16px 0 12px 0;
-        border-bottom: 2px solid #e5e7eb;
-        padding-bottom: 6px;
-      }
-      .research-content h3 {
-        color: #059669;
-        font-size: 16px;
-        font-weight: bold;
-        margin: 14px 0 8px 0;
-      }
-      .research-content p {
-        margin: 8px 0;
-        line-height: 1.6;
-      }
-      .research-content strong {
-        color: #374151;
-        font-weight: 600;
-      }
-      .research-content ul {
-        margin: 8px 0;
-        padding-left: 20px;
-      }
-      .research-content li {
-        margin: 6px 0;
-        line-height: 1.5;
-      }
-      .research-content ul li::marker {
-        color: #059669;
-      }
-    `;
-    document.head.appendChild(style);
-    
-    return () => {
-      document.head.removeChild(style);
-    };
-  }, []);
-
-  // Function to clean and format HTML content
-  const formatHTMLContent = (htmlString) => {
-    const allowedTags = ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'br', 'strong', 'em', 'ul', 'ol', 'li', 'div', 'span'];
-    
-    let cleaned = htmlString
-      .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-      .replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi, '')
-      .replace(/javascript:/gi, '')
-      .replace(/on\w+\s*=/gi, '');
-
-    return cleaned;
-  };
-
-  // Function to detect if content is HTML
-  const isHTMLContent = (content) => {
-    return /<[a-z][\s\S]*>/i.test(content);
-  };
-
-  // Function to generate unique session ID
-  const generateSessionId = () => {
-    return `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  };
-
-  // Function to generate unique message ID  
-  const generateMessageId = (type) => {
-    return `${type}_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
-  };
-
-  // Get or create session ID
+  // Utility Functions
+  const generateSessionId = () => `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  const generateMessageId = (type) => `${type}_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+  
   const getSessionId = () => {
     let sessionId = localStorage.getItem('dr_gini_session_id');
     if (!sessionId) {
@@ -128,30 +41,111 @@ const MedicalResearchGini = () => {
     return sessionId;
   };
 
-  // Test Xata connection function
-  const testXataConnection = async () => {
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  const formatTime = (date) => {
+    return new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+
+  // Content Processing Functions
+  const isHTMLContent = (content) => /<[a-z][\s\S]*>/i.test(content);
+
+  const formatHTMLContent = (htmlString) => {
+    const allowedTags = ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'br', 'strong', 'em', 'ul', 'ol', 'li', 'div', 'span'];
+    
+    return htmlString
+      .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+      .replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi, '')
+      .replace(/javascript:/gi, '')
+      .replace(/on\w+\s*=/gi, '');
+  };
+
+  const htmlToPlainText = (html) => {
+    if (!isHTMLContent(html)) return html;
+    
+    return html
+      .replace(/<h[1-6][^>]*>/g, '\n\n')
+      .replace(/<\/h[1-6]>/g, '\n')
+      .replace(/<p[^>]*>/g, '\n')
+      .replace(/<\/p>/g, '\n')
+      .replace(/<br\s*\/?>/g, '\n')
+      .replace(/<li[^>]*>/g, '\n• ')
+      .replace(/<\/li>/g, '')
+      .replace(/<ul[^>]*>|<\/ul>/g, '\n')
+      .replace(/<ol[^>]*>|<\/ol>/g, '\n')
+      .replace(/<strong[^>]*>(.*?)<\/strong>/g, '$1')
+      .replace(/<em[^>]*>(.*?)<\/em>/g, '$1')
+      .replace(/<[^>]*>/g, '')
+      .replace(/\n\n+/g, '\n\n')
+      .trim();
+  };
+
+  // Response Processing - FIXED VERSION
+  const processResponse = async (response) => {
+    console.log('Response status:', response.status);
+    console.log('Response headers:', Object.fromEntries(response.headers.entries()));
+
+    // Try to determine content type
+    const contentType = response.headers.get('content-type') || '';
+    
+    let responseData;
+    let aiResponse;
+
     try {
-      const response = await fetch(`${XATA_CONFIG.baseURL}/tables/messages/query`, {
-        method: 'POST',
-        headers: XATA_CONFIG.headers,
-        body: JSON.stringify({
-          page: { size: 1 }
-        })
-      });
-      
-      if (response.ok) {
-        console.log('✅ Xata connection successful!');
-        return true;
+      if (contentType.includes('application/json')) {
+        // Parse as JSON
+        responseData = await response.json();
+        console.log('✅ Parsed JSON response:', responseData);
+        
+        // Extract AI response from various possible fields
+        aiResponse = responseData.response || 
+                   responseData.safeResponse || 
+                   responseData.output || 
+                   responseData.message || 
+                   responseData.content ||
+                   responseData.text ||
+                   responseData;
+
+        // If it's still an object, try to extract text content
+        if (typeof aiResponse === 'object' && aiResponse !== null) {
+          // Look for text content in nested objects
+          aiResponse = aiResponse.response || 
+                      aiResponse.content || 
+                      aiResponse.text || 
+                      JSON.stringify(aiResponse, null, 2);
+        }
       } else {
-        console.error('❌ Xata connection failed:', response.status);
-        return false;
+        // Handle as plain text
+        aiResponse = await response.text();
+        console.log('✅ Received text response length:', aiResponse.length);
       }
-    } catch (error) {
-      console.error('❌ Xata connection error:', error);
-      return false;
+
+      // Validate the response
+      if (!aiResponse || (typeof aiResponse === 'string' && aiResponse.trim() === '')) {
+        throw new Error('Empty response received');
+      }
+
+      console.log('✅ Final AI response:', aiResponse);
+      return aiResponse;
+
+    } catch (parseError) {
+      console.error('Error parsing response:', parseError);
+      
+      // Fallback: try to get response as text
+      try {
+        const textResponse = await response.text();
+        console.log('📝 Fallback text response:', textResponse);
+        return textResponse || 'Unable to process the response. Please try again.';
+      } catch (textError) {
+        console.error('Error getting text response:', textError);
+        throw new Error('Failed to parse response in any format');
+      }
     }
   };
 
+  // Main send message function - IMPROVED
   const sendMessage = async () => {
     if (!inputMessage.trim() || isLoading) return;
 
@@ -181,42 +175,50 @@ const MedicalResearchGini = () => {
         timestamp: new Date().toISOString()
       };
 
+      console.log('📤 Sending request to:', N8N_WEBHOOK_URL);
+      console.log('📤 Request data:', messageData);
+
       const response = await fetch(N8N_WEBHOOK_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Accept': 'application/json, text/plain, */*'
         },
         body: JSON.stringify(messageData),
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        throw new Error(`HTTP error! status: ${response.status} - ${response.statusText}`);
       }
 
-      // UPDATED: Handle text response instead of JSON
-      const responseText = await response.text();
-      
-      console.log('✅ Full response received. Length:', responseText.length, 'characters');
+      // Process the response using our improved function
+      const aiResponse = await processResponse(response);
 
-      // Create bot message with the text response
+      // Create bot message
       const botMessage = {
         id: Date.now() + 1,
         type: 'bot',
-        content: responseText,
+        content: aiResponse,
         timestamp: new Date(),
-        isHTML: isHTMLContent(responseText),
+        isHTML: isHTMLContent(aiResponse),
         messageId: generateMessageId('gini')
       };
 
       setMessages(prev => [...prev, botMessage]);
+
     } catch (error) {
-      console.error('Error sending message:', error);
+      console.error('❌ Error sending message:', error);
+      
       let errorMessage = 'Sorry, I\'m having trouble processing your request. ';
       
       if (error.message.includes('JSON')) {
-        errorMessage += 'There was a formatting issue with the response. Please try a shorter query.';
+        errorMessage += 'There was a formatting issue with the response.';
       } else if (error.message.includes('timeout')) {
-        errorMessage += 'The request timed out. Please try breaking your query into smaller parts.';
+        errorMessage += 'The request timed out. Please try a shorter query.';
+      } else if (error.message.includes('404')) {
+        errorMessage += 'The AI service is temporarily unavailable.';
+      } else if (error.message.includes('500')) {
+        errorMessage += 'There was a server error. Please try again.';
       } else {
         errorMessage += 'Please check your connection and try again.';
       }
@@ -234,14 +236,29 @@ const MedicalResearchGini = () => {
     }
   };
 
-  const handleKeyPress = (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage();
+  // Xata connection test
+  const testXataConnection = async () => {
+    try {
+      const response = await fetch(`${XATA_CONFIG.baseURL}/tables/messages/query`, {
+        method: 'POST',
+        headers: XATA_CONFIG.headers,
+        body: JSON.stringify({ page: { size: 1 } })
+      });
+      
+      if (response.ok) {
+        console.log('✅ Xata connection successful!');
+        return true;
+      } else {
+        console.error('❌ Xata connection failed:', response.status);
+        return false;
+      }
+    } catch (error) {
+      console.error('❌ Xata connection error:', error);
+      return false;
     }
   };
 
-  // Function to handle quick feedback
+  // Feedback Functions
   const handleQuickFeedback = async (messageId, rating) => {
     try {
       const feedback = {
@@ -310,32 +327,7 @@ const MedicalResearchGini = () => {
     }
   };
 
-  // Test connection on component mount
-  useEffect(() => {
-    testXataConnection();
-  }, []);
-
-  // Function to convert HTML to plain text for downloads
-  const htmlToPlainText = (html) => {
-    if (!isHTMLContent(html)) return html;
-    
-    return html
-      .replace(/<h[1-6][^>]*>/g, '\n\n')
-      .replace(/<\/h[1-6]>/g, '\n')
-      .replace(/<p[^>]*>/g, '\n')
-      .replace(/<\/p>/g, '\n')
-      .replace(/<br\s*\/?>/g, '\n')
-      .replace(/<li[^>]*>/g, '\n• ')
-      .replace(/<\/li>/g, '')
-      .replace(/<ul[^>]*>|<\/ul>/g, '\n')
-      .replace(/<ol[^>]*>|<\/ol>/g, '\n')
-      .replace(/<strong[^>]*>(.*?)<\/strong>/g, '$1')
-      .replace(/<em[^>]*>(.*?)<\/em>/g, '$1')
-      .replace(/<[^>]*>/g, '')
-      .replace(/\n\n+/g, '\n\n')
-      .trim();
-  };
-
+  // Download Functions
   const downloadChatAsText = () => {
     const chatContent = messages
       .filter(msg => msg.type !== 'bot' || !msg.isError)
@@ -425,9 +417,74 @@ End of Drug Discovery Session
     document.body.removeChild(element);
   };
 
-  const formatTime = (date) => {
-    return new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  // Event Handlers
+  const handleKeyPress = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
   };
+
+  // Effects
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  useEffect(() => {
+    const style = document.createElement('style');
+    style.textContent = `
+      .research-content {
+        max-width: none !important;
+        max-height: none !important;
+        height: auto !important;
+        overflow: visible !important;
+        word-wrap: break-word;
+        overflow-wrap: break-word;
+      }
+      .research-content h2 {
+        color: #1e40af;
+        font-size: 18px;
+        font-weight: bold;
+        margin: 16px 0 12px 0;
+        border-bottom: 2px solid #e5e7eb;
+        padding-bottom: 6px;
+      }
+      .research-content h3 {
+        color: #059669;
+        font-size: 16px;
+        font-weight: bold;
+        margin: 14px 0 8px 0;
+      }
+      .research-content p {
+        margin: 8px 0;
+        line-height: 1.6;
+      }
+      .research-content strong {
+        color: #374151;
+        font-weight: 600;
+      }
+      .research-content ul {
+        margin: 8px 0;
+        padding-left: 20px;
+      }
+      .research-content li {
+        margin: 6px 0;
+        line-height: 1.5;
+      }
+      .research-content ul li::marker {
+        color: #059669;
+      }
+    `;
+    document.head.appendChild(style);
+    
+    return () => {
+      document.head.removeChild(style);
+    };
+  }, []);
+
+  useEffect(() => {
+    testXataConnection();
+  }, []);
 
   return (
     <div className="flex flex-col h-screen bg-gray-50">
@@ -744,8 +801,7 @@ const DetailedFeedbackModal = ({ isOpen, messageContent, onClose, onSubmit }) =>
     setFeedback(prev => ({ ...prev, [field]: rating }));
   };
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
+  const handleSubmit = () => {
     onSubmit(feedback);
     setFeedback({
       rating: 0,
@@ -785,7 +841,7 @@ const DetailedFeedbackModal = ({ isOpen, messageContent, onClose, onSubmit }) =>
             />
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="space-y-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Overall Rating
@@ -890,20 +946,19 @@ const DetailedFeedbackModal = ({ isOpen, messageContent, onClose, onSubmit }) =>
 
             <div className="flex space-x-3 pt-4">
               <button
-                type="submit"
+                onClick={handleSubmit}
                 className="flex-1 bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 Submit Feedback
               </button>
               <button
-                type="button"
                 onClick={onClose}
                 className="px-6 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500"
               >
                 Cancel
               </button>
             </div>
-          </form>
+          </div>
         </div>
       </div>
     </div>
