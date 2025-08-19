@@ -17,6 +17,51 @@ const MedicalResearchGini = () => {
   // N8n webhook URL - replace with your actual webhook URL
   const N8N_WEBHOOK_URL = process.env.REACT_APP_N8N_WEBHOOK_URL || 'https://prshntkumrai.app.n8n.cloud/webhook/Chatbot';
 
+  // Add CSS styles for research content
+  useEffect(() => {
+    const style = document.createElement('style');
+    style.textContent = `
+      .research-content h2 {
+        color: #1e40af;
+        font-size: 18px;
+        font-weight: bold;
+        margin: 16px 0 12px 0;
+        border-bottom: 2px solid #e5e7eb;
+        padding-bottom: 6px;
+      }
+      .research-content h3 {
+        color: #059669;
+        font-size: 16px;
+        font-weight: bold;
+        margin: 14px 0 8px 0;
+      }
+      .research-content p {
+        margin: 8px 0;
+        line-height: 1.6;
+      }
+      .research-content strong {
+        color: #374151;
+        font-weight: 600;
+      }
+      .research-content ul {
+        margin: 8px 0;
+        padding-left: 20px;
+      }
+      .research-content li {
+        margin: 6px 0;
+        line-height: 1.5;
+      }
+      .research-content ul li::marker {
+        color: #059669;
+      }
+    `;
+    document.head.appendChild(style);
+    
+    return () => {
+      document.head.removeChild(style);
+    };
+  }, []);
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
@@ -99,10 +144,8 @@ const MedicalResearchGini = () => {
         responseText = 'I received your message successfully.';
       }
 
-      // Truncate if too long (frontend safety)
-      if (responseText.length > 8000) {
-        responseText = responseText.substring(0, 8000) + '\n\n[Response truncated for display]';
-      }
+      // Note: Removed truncation to allow full research responses
+      // If performance becomes an issue, consider pagination or collapsible sections
       
       const botMessage = {
         id: Date.now() + 1,
@@ -381,16 +424,17 @@ End of Drug Discovery Session
                       ? 'bg-red-50 text-red-800 border border-red-200'
                       : 'bg-white text-gray-800 border border-gray-200'
                 }`}>
-                  {/* CRITICAL CHANGE: Render HTML content properly */}
+                  {/* CRITICAL CHANGE: Render HTML content properly with better styling */}
                   {message.isHTML && message.type === 'bot' ? (
                     <div 
-                      className="prose prose-sm max-w-none"
+                      className="research-content"
                       dangerouslySetInnerHTML={{ 
                         __html: formatHTMLContent(message.content) 
                       }}
                       style={{
-                        lineHeight: '1.6',
-                        fontSize: '14px'
+                        lineHeight: '1.7',
+                        fontSize: '14px',
+                        color: '#374151',
                       }}
                     />
                   ) : (
