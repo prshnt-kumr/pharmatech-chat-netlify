@@ -193,38 +193,19 @@ const MedicalResearchGini = () => {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      const contentType = response.headers.get('content-type');
-      if (!contentType || !contentType.includes('application/json')) {
-        throw new Error('Response is not JSON format');
-      }
-
-      const data = await response.json();
+      // UPDATED: Handle text response instead of JSON
+      const responseText = await response.text();
       
-      let responseText = '';
-      if (data.response) {
-        responseText = data.response;
-      } else if (data.output) {
-        responseText = data.output; // Primary field from n8n
-      } else if (data.message) {
-        responseText = data.message;
-      } else if (data.text) {
-        responseText = data.text;
-      } else if (typeof data === 'string') {
-        responseText = data;
-      } else {
-        responseText = 'I received your message successfully.';
-      }
-
-      // NO TRUNCATION EVER - Research content can be any length
       console.log('✅ Full response received. Length:', responseText.length, 'characters');
-      
+
+      // Create bot message with the text response
       const botMessage = {
         id: Date.now() + 1,
         type: 'bot',
-        content: responseText, // Complete content, no limits
+        content: responseText,
         timestamp: new Date(),
         isHTML: isHTMLContent(responseText),
-        messageId: data.messageId || generateMessageId('gini')
+        messageId: generateMessageId('gini')
       };
 
       setMessages(prev => [...prev, botMessage]);
@@ -568,8 +549,8 @@ End of Drug Discovery Session
                         lineHeight: '1.7',
                         fontSize: '14px',
                         color: '#374151',
-                        maxHeight: 'none', // No height restrictions
-                        overflow: 'visible', // Always show full content
+                        maxHeight: 'none',
+                        overflow: 'visible',
                         wordBreak: 'break-word'
                       }}
                     />
