@@ -100,48 +100,10 @@ const MedicalResearchGini = () => {
       let finalHtml = '';
 
       // AUTO-DETECT FORMAT AND PROCESS ACCORDINGLY
+      // IMPORTANT: Check iframe FIRST before checking for HTML tags
       
-      // 1. Try JSON first (handles schema, json mode)
-      if (rawText.trim().startsWith('{') || rawText.trim().startsWith('[')) {
-        console.log('🎯 AUTO-DETECTED: JSON format');
-        try {
-          const jsonData = JSON.parse(rawText);
-          console.log('📦 JSON structure:', Object.keys(jsonData));
-          
-          // Handle different JSON structures
-          if (Array.isArray(jsonData)) {
-            console.log('📋 JSON Array detected');
-            if (jsonData.length > 0) {
-              const firstItem = jsonData[0];
-              finalHtml = firstItem.output || firstItem.response || firstItem.content || firstItem.message || '';
-            }
-          } else if (typeof jsonData === 'object') {
-            console.log('📋 JSON Object detected');
-            finalHtml = jsonData.output || 
-                       jsonData.response || 
-                       jsonData.content || 
-                       jsonData.message || 
-                       jsonData.safeResponse ||
-                       jsonData.text ||
-                       jsonData.data ||
-                       JSON.stringify(jsonData, null, 2);
-          }
-          
-          console.log('✅ Extracted from JSON, length:', finalHtml.length);
-        } catch (jsonError) {
-          console.log('⚠️ JSON parsing failed:', jsonError.message);
-          finalHtml = rawText; // Fallback to raw text
-        }
-      }
-      
-      // 2. Check for direct HTML (table mode)
-      else if (rawText.includes('<h2>') || rawText.includes('<h3>') || rawText.includes('<p>')) {
-        console.log('🎯 AUTO-DETECTED: Direct HTML format (table mode)');
-        finalHtml = rawText;
-      }
-      
-      // 3. Check for iframe wrapped content (YOUR EXACT FORMAT)
-      else if (rawText.includes('<iframe') && rawText.includes('srcdoc=')) {
+      // 1. Check for iframe wrapped content (YOUR EXACT FORMAT) - PRIORITY CHECK
+      if (rawText.includes('<iframe') && rawText.includes('srcdoc=')) {
         console.log('🎯 AUTO-DETECTED: Iframe wrapped HTML (n8n format)');
         
         // Extract content from srcdoc attribute - handles both quoted and unquoted
@@ -174,6 +136,45 @@ const MedicalResearchGini = () => {
           console.log('⚠️ iframe detected but srcdoc extraction failed');
           finalHtml = rawText; // Fallback to raw text
         }
+      }
+      
+      // 2. Try JSON (handles schema, json mode)
+      else if (rawText.trim().startsWith('{') || rawText.trim().startsWith('[')) {
+        console.log('🎯 AUTO-DETECTED: JSON format');
+        try {
+          const jsonData = JSON.parse(rawText);
+          console.log('📦 JSON structure:', Object.keys(jsonData));
+          
+          // Handle different JSON structures
+          if (Array.isArray(jsonData)) {
+            console.log('📋 JSON Array detected');
+            if (jsonData.length > 0) {
+              const firstItem = jsonData[0];
+              finalHtml = firstItem.output || firstItem.response || firstItem.content || firstItem.message || '';
+            }
+          } else if (typeof jsonData === 'object') {
+            console.log('📋 JSON Object detected');
+            finalHtml = jsonData.output || 
+                       jsonData.response || 
+                       jsonData.content || 
+                       jsonData.message || 
+                       jsonData.safeResponse ||
+                       jsonData.text ||
+                       jsonData.data ||
+                       JSON.stringify(jsonData, null, 2);
+          }
+          
+          console.log('✅ Extracted from JSON, length:', finalHtml.length);
+        } catch (jsonError) {
+          console.log('⚠️ JSON parsing failed:', jsonError.message);
+          finalHtml = rawText; // Fallback to raw text
+        }
+      }
+      
+      // 3. Check for direct HTML (table mode)
+      else if (rawText.includes('<h2>') || rawText.includes('<h3>') || rawText.includes('<p>')) {
+        console.log('🎯 AUTO-DETECTED: Direct HTML format (table mode)');
+        finalHtml = rawText;
       }
       
       // 4. Plain text fallback
