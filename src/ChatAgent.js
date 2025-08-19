@@ -1,76 +1,55 @@
-﻿// Response Processing - HANDLE SAFERESPONSE WITH ESCAPED CONTENT
+﻿// Response Processing - HANDLE DIRECT HTML TEXT RESPONSE
   const processResponse = async (response) => {
-    console.log('🔍 Processing safeResponse with escaped content...');
+    console.log('🔍 Processing direct HTML text response...');
     console.log('Response status:', response.status);
     console.log('Response headers:', Object.fromEntries(response.headers.entries()));
 
     try {
-      // Parse the JSON response
-      const responseData = await response.json();
-      console.log('✅ Parsed JSON response:', responseData);
-      
-      // Extract the safeResponse content
-      let htmlContent = responseData.safeResponse || 
-                       responseData.response || 
-                       responseData.content || 
-                       responseData.output || 
-                       'No content found';
+      // Get response as text since webhook returns HTML directly
+      const htmlContent = await response.text();
+      console.log('✅ HTML response length:', htmlContent.length);
+      console.log('✅ HTML content preview:', htmlContent.substring(0, 400) + '...');
 
-      console.log('✅ Raw safeResponse length:', htmlContent.length);
-      console.log('✅ Raw safeResponse preview:', htmlContent.substring(0, 300) + '...');
-
-      // Process the escaped content from your webhook format
-      if (typeof htmlContent === 'string') {
-        console.log('🔄 Processing escaped HTML content...');
-        
-        // Unescape the content that was escaped in your webhook
-        htmlContent = htmlContent
-          // Unescape quotes
-          .replace(/\\"/g, '"')
-          .replace(/\\'/g, "'")
-          // Convert spaces back to newlines for HTML structure
-          .replace(/\s+</g, '<')  // Remove extra spaces before tags
-          .replace(/>\s+/g, '>')  // Remove extra spaces after tags
-          .replace(/\s+/g, ' ')   // Normalize multiple spaces
-          .replace(/(<\/[^>]+>)\s+(<[^>\/][^>]*>)/g, '$1 $2') // Add space between closing and opening tags
-          .trim();
-
-        console.log('✅ Processed HTML length:', htmlContent.length);
-        console.log('✅ Processed HTML preview:', htmlContent.substring(0, 400) + '...');
-      }
-
-      // Validate we have actual content
-      if (!htmlContent || htmlContent.length < 50) {
-        console.warn('⚠️ Content is too short after processing');
+      // Validate we have content
+      if (!htmlContent || htmlContent.trim().length < 20) {
+        console.warn('⚠️ HTML content is too short');
         return `<div style="padding: 12px; background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 6px;">
-          <p><strong>Content Processing Issue</strong></p>
-          <p>Received safeResponse but content appears to be too short.</p>
+          <p><strong>Content Issue</strong></p>
+          <p>Received HTML response but content appears to be empty or too short.</p>
           <details>
             <summary>Debug Info</summary>
-            <p>Original safeResponse:</p>
-            <pre style="font-size: 11px; background: #f8f9fa; padding: 8px; margin-top: 8px; max-height: 200px; overflow-y: auto;">${responseData.safeResponse || 'Not found'}</pre>
-            <p>Full response:</p>
-            <pre style="font-size: 11px; background: #f8f9fa; padding: 8px; margin-top: 8px; max-height: 200px; overflow-y: auto;">${JSON.stringify(responseData, null, 2)}</pre>
+            <pre style="font-size: 11px; background: #f8f9fa; padding: 8px; margin-top: 8px; max-height: 200px; overflow-y: auto;">${htmlContent}</pre>
           </details>
         </div>`;
       }
 
-      return htmlContent;
+      // Clean up the HTML slightly (remove document wrappers if any)
+      const cleanedHtml = htmlContent
+        .replace(/^<!DOCTYPE[^>]*>/i, '')
+        .replace(/^<html[^>]*>/i, '')
+        .replace(/<\/html>$/i, '')
+        .replace(/^<head>.*?<\/head>/is, '')
+        .replace(/^<body[^>]*>/i, '')
+        .replace(/<\/body>$/i, '')
+        .trim();
 
-    } catch (parseError) {
-      console.error('❌ Error processing safeResponse:', parseError);
+      console.log('✅ Cleaned HTML ready for display');
+      return cleanedHtml;
+
+    } catch (readError) {
+      console.error('❌ Error reading HTML response:', readError);
       
-      // Fallback: try to read as text
+      // Fallback: try JSON parsing in case format changed
       try {
-        const textContent = await response.text();
-        console.log('📝 Fallback text content:', textContent.substring(0, 200) + '...');
-        return textContent;
-      } catch (textError) {
-        console.error('❌ Both JSON and text parsing failed');
+        const jsonData = await response.json();
+        console.log('📝 Fallback: trying JSON parsing');
+        return jsonData.response || jsonData.safeResponse || jsonData.output || JSON.stringify(jsonData);
+      } catch (jsonError) {
+        console.error('❌ Both HTML and JSON parsing failed');
         return `<div style="color: #dc2626; background: #fef2f2; padding: 12px; border-radius: 6px; border: 1px solid #fecaca;">
           <strong>Response Processing Error</strong><br/>
-          Unable to process the safeResponse. Please try again.
-          <br/><small>Parse Error: ${parseError.message}</small>
+          Unable to process the response. Please try again.
+          <br/><small>Error: ${readError.message}</small>
         </div>`;
       }
     }
