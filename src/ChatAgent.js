@@ -25,6 +25,26 @@ const MedicalResearchGini = () => {
     scrollToBottom();
   }, [messages]);
 
+  // Function to clean and format HTML content
+  const formatHTMLContent = (htmlString) => {
+    // Basic HTML sanitization for safety
+    const allowedTags = ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'br', 'strong', 'em', 'ul', 'ol', 'li', 'div', 'span'];
+    
+    // Remove script tags and other potentially dangerous content
+    let cleaned = htmlString
+      .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+      .replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi, '')
+      .replace(/javascript:/gi, '')
+      .replace(/on\w+\s*=/gi, '');
+
+    return cleaned;
+  };
+
+  // Function to detect if content is HTML
+  const isHTMLContent = (content) => {
+    return /<[a-z][\s\S]*>/i.test(content);
+  };
+
   const sendMessage = async () => {
     if (!inputMessage.trim() || isLoading) return;
 
@@ -89,7 +109,8 @@ const MedicalResearchGini = () => {
         type: 'bot',
         content: responseText,
         timestamp: new Date(),
-        truncated: data.truncated || false
+        truncated: data.truncated || false,
+        isHTML: isHTMLContent(responseText)
       };
 
       setMessages(prev => [...prev, botMessage]);
@@ -125,13 +146,35 @@ const MedicalResearchGini = () => {
     }
   };
 
+  // Function to convert HTML to plain text for downloads
+  const htmlToPlainText = (html) => {
+    if (!isHTMLContent(html)) return html;
+    
+    return html
+      .replace(/<h[1-6][^>]*>/g, '\n\n')
+      .replace(/<\/h[1-6]>/g, '\n')
+      .replace(/<p[^>]*>/g, '\n')
+      .replace(/<\/p>/g, '\n')
+      .replace(/<br\s*\/?>/g, '\n')
+      .replace(/<li[^>]*>/g, '\n• ')
+      .replace(/<\/li>/g, '')
+      .replace(/<ul[^>]*>|<\/ul>/g, '\n')
+      .replace(/<ol[^>]*>|<\/ol>/g, '\n')
+      .replace(/<strong[^>]*>(.*?)<\/strong>/g, '$1')
+      .replace(/<em[^>]*>(.*?)<\/em>/g, '$1')
+      .replace(/<[^>]*>/g, '')
+      .replace(/\n\n+/g, '\n\n')
+      .trim();
+  };
+
   const downloadChatAsText = () => {
     const chatContent = messages
       .filter(msg => msg.type !== 'bot' || !msg.isError)
       .map(msg => {
         const timestamp = new Date(msg.timestamp).toLocaleString();
         const sender = msg.type === 'user' ? 'Researcher' : 'Dr. Gini (Drug Discovery Specialist)';
-        return `[${timestamp}] ${sender}: ${msg.content}`;
+        const content = htmlToPlainText(msg.content);
+        return `[${timestamp}] ${sender}: ${content}`;
       })
       .join('\n\n');
 
@@ -163,7 +206,8 @@ End of Drug Discovery Session
       .map(msg => {
         const timestamp = new Date(msg.timestamp).toLocaleString();
         const sender = msg.type === 'user' ? 'Researcher' : 'Dr. Gini (Drug Discovery Specialist)';
-        return `[${timestamp}] ${sender}: ${msg.content}`;
+        const content = htmlToPlainText(msg.content);
+        return `[${timestamp}] ${sender}: ${content}`;
       })
       .join('\n\n');
 
@@ -196,7 +240,7 @@ End of Drug Discovery Session
       .map(msg => {
         const timestamp = new Date(msg.timestamp).toLocaleString();
         const sender = msg.type === 'user' ? 'Researcher' : 'Dr. Gini (Drug Discovery Specialist)';
-        const content = msg.content.replace(/"/g, '""');
+        const content = htmlToPlainText(msg.content).replace(/"/g, '""');
         return `"${timestamp}","${sender}","${content}"`;
       })
       .join('\n');
@@ -337,7 +381,21 @@ End of Drug Discovery Session
                       ? 'bg-red-50 text-red-800 border border-red-200'
                       : 'bg-white text-gray-800 border border-gray-200'
                 }`}>
-                  <p className="whitespace-pre-wrap">{message.content}</p>
+                  {/* CRITICAL CHANGE: Render HTML content properly */}
+                  {message.isHTML && message.type === 'bot' ? (
+                    <div 
+                      className="prose prose-sm max-w-none"
+                      dangerouslySetInnerHTML={{ 
+                        __html: formatHTMLContent(message.content) 
+                      }}
+                      style={{
+                        lineHeight: '1.6',
+                        fontSize: '14px'
+                      }}
+                    />
+                  ) : (
+                    <p className="whitespace-pre-wrap">{message.content}</p>
+                  )}
                 </div>
                 <span className="text-xs text-gray-400 mt-1">
                   {formatTime(message.timestamp)}
