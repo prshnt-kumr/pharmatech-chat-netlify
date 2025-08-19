@@ -127,10 +127,24 @@ const MedicalResearchGini = () => {
         .replace(/^<head>.*?<\/head>/is, '')
         .replace(/^<body[^>]*>/i, '')
         .replace(/<\/body>$/i, '')
-        // Clean up whitespace while preserving HTML structure
+        // Clean up iframe tags that might cause issues
+        .replace(/<iframe[^>]*>.*?<\/iframe>/gis, '')
+        // Ensure proper HTML structure
+        .replace(/^\s+|\s+$/g, '')
         .trim();
 
       console.log('✅ HTML cleaned and ready for display');
+      console.log('🔍 Cleaned HTML preview:', cleanedHtml.substring(0, 200) + '...');
+      
+      // Validate that we have actual content
+      if (cleanedHtml.length < 10) {
+        console.warn('⚠️ Cleaned HTML is very short, might be empty');
+        return `<div style="padding: 12px; background: #f3f4f6; border-radius: 6px;">
+          <p>I received a response but it appears to be empty or invalid. Please try again.</p>
+          <small>Original content length: ${htmlContent.length}</small>
+        </div>`;
+      }
+      
       return cleanedHtml;
 
     } catch (readError) {
@@ -211,15 +225,21 @@ const MedicalResearchGini = () => {
       // Process the response using our improved function
       const aiResponse = await processResponse(response);
 
-      // Create bot message with the HTML response
+      // Create bot message with HTML content
       const botMessage = {
         id: Date.now() + 1,
         type: 'bot',
         content: aiResponse,
         timestamp: new Date(),
-        isHTML: true, // Always treat as HTML since webhook returns formatted HTML
+        isHTML: true, // Always treat as HTML since webhook returns HTML
         messageId: generateMessageId('gini')
       };
+
+      console.log('📤 Creating bot message:', {
+        contentLength: aiResponse.length,
+        isHTML: true,
+        contentPreview: aiResponse.substring(0, 100) + '...'
+      });
 
       setMessages(prev => [...prev, botMessage]);
 
@@ -625,13 +645,14 @@ End of Drug Discovery Session
                         color: '#374151',
                         maxHeight: 'none',
                         overflow: 'visible',
-                        wordBreak: 'break-word'
+                        wordBreak: 'break-word',
+                        width: '100%'
                       }}
                     />
                   ) : (
-                    <p className="whitespace-pre-wrap" style={{ maxHeight: 'none', overflow: 'visible' }}>
+                    <div className="whitespace-pre-wrap" style={{ maxHeight: 'none', overflow: 'visible' }}>
                       {message.content}
-                    </p>
+                    </div>
                   )}
                 </div>
 
