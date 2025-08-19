@@ -41,6 +41,14 @@ const MedicalResearchGini = () => {
   useEffect(() => {
     const style = document.createElement('style');
     style.textContent = `
+      .research-content {
+        max-width: none !important;
+        max-height: none !important;
+        height: auto !important;
+        overflow: visible !important;
+        word-wrap: break-word;
+        overflow-wrap: break-word;
+      }
       .research-content h2 {
         color: #1e40af;
         font-size: 18px;
@@ -195,6 +203,8 @@ const MedicalResearchGini = () => {
       let responseText = '';
       if (data.response) {
         responseText = data.response;
+      } else if (data.output) {
+        responseText = data.output; // Primary field from n8n
       } else if (data.message) {
         responseText = data.message;
       } else if (data.text) {
@@ -204,13 +214,15 @@ const MedicalResearchGini = () => {
       } else {
         responseText = 'I received your message successfully.';
       }
+
+      // NO TRUNCATION EVER - Research content can be any length
+      console.log('✅ Full response received. Length:', responseText.length, 'characters');
       
       const botMessage = {
         id: Date.now() + 1,
         type: 'bot',
-        content: responseText,
+        content: responseText, // Complete content, no limits
         timestamp: new Date(),
-        truncated: data.truncated || false,
         isHTML: isHTMLContent(responseText),
         messageId: data.messageId || generateMessageId('gini')
       };
@@ -545,7 +557,7 @@ End of Drug Discovery Session
                     : message.isError
                       ? 'bg-red-50 text-red-800 border border-red-200'
                       : 'bg-white text-gray-800 border border-gray-200'
-                }`}>
+                }`} style={{ maxHeight: 'none', overflow: 'visible' }}>
                   {message.isHTML && message.type === 'bot' ? (
                     <div 
                       className="research-content"
@@ -556,10 +568,15 @@ End of Drug Discovery Session
                         lineHeight: '1.7',
                         fontSize: '14px',
                         color: '#374151',
+                        maxHeight: 'none', // No height restrictions
+                        overflow: 'visible', // Always show full content
+                        wordBreak: 'break-word'
                       }}
                     />
                   ) : (
-                    <p className="whitespace-pre-wrap">{message.content}</p>
+                    <p className="whitespace-pre-wrap" style={{ maxHeight: 'none', overflow: 'visible' }}>
+                      {message.content}
+                    </p>
                   )}
                 </div>
 
