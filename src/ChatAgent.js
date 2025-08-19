@@ -82,49 +82,64 @@ const MedicalResearchGini = () => {
       .trim();
   };
 
-  // Response Processing - FIXED STREAM READING ISSUE
+  // Response Processing - OPTIMIZED FOR HTML FIRST
   const processResponse = async (response) => {
-    console.log('🔍 Processing response...');
+    console.log('🔍 Processing HTML response...');
     console.log('Response status:', response.status);
     console.log('Response headers:', Object.fromEntries(response.headers.entries()));
 
     try {
-      // Read the response only once
-      const responseText = await response.text();
-      console.log('✅ Response text length:', responseText.length);
-      console.log('✅ Response preview:', responseText.substring(0, 300) + '...');
+      // Read the response as text (since it's always HTML)
+      const htmlContent = await response.text();
+      console.log('✅ HTML response length:', htmlContent.length);
+      console.log('✅ HTML preview (first 300 chars):', htmlContent.substring(0, 300) + '...');
 
       // Validate the response
-      if (!responseText || responseText.trim() === '') {
-        throw new Error('Empty response received');
+      if (!htmlContent || htmlContent.trim() === '') {
+        throw new Error('Empty HTML response received');
       }
 
-      // Try to parse as JSON first
-      try {
-        const responseData = JSON.parse(responseText);
-        console.log('✅ Parsed as JSON successfully');
-        
-        // Extract the AI response from JSON
-        const aiResponse = responseData.response || 
-                          responseData.content || 
-                          responseData.output || 
-                          responseData.message || 
-                          'No response content found';
-        
-        return aiResponse;
-      } catch (jsonError) {
-        console.log('⚠️ Not JSON, treating as HTML/text');
-        // If not JSON, treat as HTML/text directly
-        return responseText;
+      // Check if it's wrapped in JSON (sometimes webhooks do this)
+      if (htmlContent.trim().startsWith('{') && htmlContent.trim().endsWith('}')) {
+        try {
+          console.log('🔄 Detected JSON wrapper, extracting HTML...');
+          const jsonData = JSON.parse(htmlContent);
+          const extractedHtml = jsonData.response || 
+                               jsonData.content || 
+                               jsonData.output || 
+                               jsonData.message ||
+                               htmlContent;
+          
+          console.log('✅ Extracted HTML from JSON wrapper');
+          return extractedHtml;
+        } catch (jsonError) {
+          console.log('⚠️ JSON parsing failed, treating as raw HTML');
+          return htmlContent;
+        }
       }
+
+      // Clean up the HTML for better display
+      const cleanedHtml = htmlContent
+        // Remove any potential document wrappers
+        .replace(/^<!DOCTYPE[^>]*>/i, '')
+        .replace(/^<html[^>]*>/i, '')
+        .replace(/<\/html>$/i, '')
+        .replace(/^<head>.*?<\/head>/is, '')
+        .replace(/^<body[^>]*>/i, '')
+        .replace(/<\/body>$/i, '')
+        // Clean up whitespace while preserving HTML structure
+        .trim();
+
+      console.log('✅ HTML cleaned and ready for display');
+      return cleanedHtml;
 
     } catch (readError) {
-      console.error('❌ Error reading response:', readError);
+      console.error('❌ Error reading HTML response:', readError);
       return `
         <div style="color: #dc2626; background: #fef2f2; padding: 12px; border-radius: 6px; border: 1px solid #fecaca;">
-          <strong>Response Processing Error</strong><br/>
-          Unable to read the response. Please try again.
-          <br/><small>Status: ${response.status}</small>
+          <strong>HTML Processing Error</strong><br/>
+          Unable to read the HTML response. Please try again.
+          <br/><small>Error: ${readError.message}</small>
         </div>
       `;
     }
