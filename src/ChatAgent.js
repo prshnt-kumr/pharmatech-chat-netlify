@@ -82,66 +82,53 @@ const MedicalResearchGini = () => {
       .trim();
   };
 
-  // Response Processing - FIXED VERSION
+  // Response Processing - OPTIMIZED FOR TEXT/HTML RESPONSE
   const processResponse = async (response) => {
+    console.log('🔍 Processing text/HTML response...');
     console.log('Response status:', response.status);
     console.log('Response headers:', Object.fromEntries(response.headers.entries()));
 
-    // Try to determine content type
-    const contentType = response.headers.get('content-type') || '';
-    
-    let responseData;
-    let aiResponse;
-
     try {
-      if (contentType.includes('application/json')) {
-        // Parse as JSON
-        responseData = await response.json();
-        console.log('✅ Parsed JSON response:', responseData);
-        
-        // Extract AI response from various possible fields
-        aiResponse = responseData.response || 
-                   responseData.safeResponse || 
-                   responseData.output || 
-                   responseData.message || 
-                   responseData.content ||
-                   responseData.text ||
-                   responseData;
-
-        // If it's still an object, try to extract text content
-        if (typeof aiResponse === 'object' && aiResponse !== null) {
-          // Look for text content in nested objects
-          aiResponse = aiResponse.response || 
-                      aiResponse.content || 
-                      aiResponse.text || 
-                      JSON.stringify(aiResponse, null, 2);
-        }
-      } else {
-        // Handle as plain text
-        aiResponse = await response.text();
-        console.log('✅ Received text response length:', aiResponse.length);
-      }
-
+      // Get response as text since webhook returns HTML directly
+      const htmlResponse = await response.text();
+      console.log('✅ Received HTML response length:', htmlResponse.length);
+      console.log('✅ HTML preview (first 300 chars):', htmlResponse.substring(0, 300) + '...');
+      
       // Validate the response
-      if (!aiResponse || (typeof aiResponse === 'string' && aiResponse.trim() === '')) {
-        throw new Error('Empty response received');
+      if (!htmlResponse || htmlResponse.trim() === '') {
+        throw new Error('Empty HTML response received');
       }
 
-      console.log('✅ Final AI response:', aiResponse);
-      return aiResponse;
+      // Clean up the HTML and ensure it's properly formatted
+      let cleanedHtml = htmlResponse
+        // Remove any potential wrapper elements that might cause issues
+        .replace(/^<!DOCTYPE[^>]*>/i, '')
+        .replace(/^<html[^>]*>/i, '')
+        .replace(/<\/html>$/i, '')
+        .replace(/^<head>.*?<\/head>/is, '')
+        .replace(/^<body[^>]*>/i, '')
+        .replace(/<\/body>$/i, '')
+        // Clean up extra whitespace but preserve HTML structure
+        .replace(/^\s+|\s+$/g, '')
+        // Ensure proper spacing between HTML elements
+        .replace(/>\s+</g, '><')
+        .replace(/(<\/[^>]+>)([^<])/g, '$1 $2')
+        .replace(/([^>])(<[^\/])/g, '$1 $2');
+
+      console.log('✅ Cleaned HTML ready for display');
+      return cleanedHtml;
 
     } catch (parseError) {
-      console.error('Error parsing response:', parseError);
+      console.error('❌ Error processing HTML response:', parseError);
       
-      // Fallback: try to get response as text
-      try {
-        const textResponse = await response.text();
-        console.log('📝 Fallback text response:', textResponse);
-        return textResponse || 'Unable to process the response. Please try again.';
-      } catch (textError) {
-        console.error('Error getting text response:', textError);
-        throw new Error('Failed to parse response in any format');
-      }
+      // Fallback handling
+      return `
+        <div style="color: #dc2626; background: #fef2f2; padding: 12px; border-radius: 6px; border: 1px solid #fecaca;">
+          <strong>Response Processing Error</strong><br/>
+          I encountered an issue processing the response. Please try again with a different query.
+          <br/><small>Error: ${parseError.message}</small>
+        </div>
+      `;
     }
   };
 
@@ -187,20 +174,31 @@ const MedicalResearchGini = () => {
         body: JSON.stringify(messageData),
       });
 
+      console.log('📥 Response received:', {
+        status: response.status,
+        statusText: response.statusText,
+        ok: response.ok,
+        type: response.type,
+        url: response.url
+      });
+
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status} - ${response.statusText}`);
+        // Log the error response body for debugging
+        const errorText = await response.text();
+        console.error('❌ Error response body:', errorText);
+        throw new Error(`HTTP error! status: ${response.status} - ${response.statusText}. Response: ${errorText}`);
       }
 
       // Process the response using our improved function
       const aiResponse = await processResponse(response);
 
-      // Create bot message
+      // Create bot message with the HTML response
       const botMessage = {
         id: Date.now() + 1,
         type: 'bot',
         content: aiResponse,
         timestamp: new Date(),
-        isHTML: isHTMLContent(aiResponse),
+        isHTML: true, // Always treat as HTML since webhook returns formatted HTML
         messageId: generateMessageId('gini')
       };
 
