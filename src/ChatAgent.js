@@ -1,5 +1,5 @@
 ﻿import React, { useState, useRef, useEffect } from 'react';
-import { Send, Download, FileText, FileSpreadsheet, User, Loader2 } from 'lucide-react';
+import { Send, Download, FileText, FileSpreadsheet, User, Loader2, ThumbsUp, ThumbsDown, MessageSquare, X, Star } from 'lucide-react';
 
 const MedicalResearchGini = () => {
   const [messages, setMessages] = useState([
@@ -12,10 +12,136 @@ const MedicalResearchGini = () => {
   ]);
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [feedbackModal, setFeedbackModal] = useState({ open: false, messageId: null, messageContent: '' });
+  const [userFeedback, setUserFeedback] = useState({});
   const messagesEndRef = useRef(null);
 
-  // N8n webhook URL - replace with your actual webhook URL
+  // Function to handle quick feedback (thumbs up/down)
+  const handleQuickFeedback = async (messageId, rating) => {
+    try {
+      const feedback = {
+        messageId: messageId,
+        thumbsRating: rating, // 'up' or 'down'
+        feedbackType: 'quick',
+        timestamp: new Date().toISOString(),
+        userId: `user-${Date.now()}` // You can make this more sophisticated
+      // Xata configuration for ZAPAL01GRP01 database
+  const XATA_CONFIG = {
+    baseURL: 'https://Prashant-Kumar-s-workspace-9seqfg.us-east-1.xata.sh/db/ZAPAL01GRP01:main',
+    apiKey: process.env.REACT_APP_XATA_API_KEY || 'YOUR_XATA_API_KEY_HERE', // Add your Xata API key
+    headers: {
+      'Authorization': `Bearer ${process.env.REACT_APP_XATA_API_KEY || 'YOUR_XATA_API_KEY_HERE'}`,
+      'Content-Type': 'application/json'
+    }
+  // Function to generate unique session ID
+  const generateSessionId = () => {
+    return `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  };
+
+  // Function to generate unique message ID  
+  const generateMessageId = (type) => {
+    return `${type}_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+  };
+
+  // Get or create session ID
+  const getSessionId = () => {
+    let sessionId = localStorage.getItem('dr_gini_session_id');
+    if (!sessionId) {
+      sessionId = generateSessionId();
+      localStorage.setItem('dr_gini_session_id', sessionId);
+    }
+    return sessionId;
+  };
+
+  // Test Xata connection function
+  const testXataConnection = async () => {
+    try {
+      const response = await fetch(`${XATA_CONFIG.baseURL}/tables/messages/query`, {
+        method: 'POST',
+        headers: XATA_CONFIG.headers,
+        body: JSON.stringify({
+          page: { size: 1 }
+        })
+      });
+      
+      if (response.ok) {
+        console.log('✅ Xata connection successful!');
+        return true;
+      } else {
+        console.error('❌ Xata connection failed:', response.status);
+        return false;
+      }
+    } catch (error) {
+      console.error('❌ Xata connection error:', error);
+      return false;
+    }
+  };
+
+  // n8n webhook URL - we'll create this next
   const N8N_WEBHOOK_URL = process.env.REACT_APP_N8N_WEBHOOK_URL || 'https://prshntkumrai.app.n8n.cloud/webhook/Chatbot';
+
+      // Send feedback to n8n webhook
+      await fetch(`${N8N_WEBHOOK_URL}/feedback`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(feedback)
+      });
+
+      // Update local state to show feedback was given
+      setUserFeedback(prev => ({
+        ...prev,
+        [messageId]: { ...prev[messageId], thumbs: rating }
+      }));
+
+    } catch (error) {
+      console.error('Error sending quick feedback:', error);
+    }
+  };
+
+  // Function to open detailed feedback modal
+  const openDetailedFeedback = (messageId, messageContent) => {
+    setFeedbackModal({
+      open: true,
+      messageId: messageId,
+      messageContent: messageContent
+    });
+  };
+
+  // Function to submit detailed feedback
+  const submitDetailedFeedback = async (feedbackData) => {
+    try {
+      const feedback = {
+        messageId: feedbackModal.messageId,
+        ...feedbackData,
+        feedbackType: 'detailed',
+        timestamp: new Date().toISOString(),
+        userId: `user-${Date.now()}`
+      };
+
+      // Send to n8n webhook
+      await fetch(`${N8N_WEBHOOK_URL}/feedback`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(feedback)
+      });
+
+      // Update local state
+      setUserFeedback(prev => ({
+        ...prev,
+        [feedbackModal.messageId]: { 
+          ...prev[feedbackModal.messageId], 
+          detailed: true,
+          rating: feedbackData.rating 
+        }
+      }));
+
+      // Close modal
+      setFeedbackModal({ open: false, messageId: null, messageContent: '' });
+
+    } catch (error) {
+      console.error('Error sending detailed feedback:', error);
+    }
+  };
 
   // Add CSS styles for research content
   useEffect(() => {
@@ -93,11 +219,16 @@ const MedicalResearchGini = () => {
   const sendMessage = async () => {
     if (!inputMessage.trim() || isLoading) return;
 
+    const sessionId = getSessionId();
+    const userId = `user_${Date.now()}`; // You can make this more sophisticated
+    const messageId = generateMessageId('user');
+
     const userMessage = {
       id: Date.now(),
       type: 'user',
       content: inputMessage,
       timestamp: new Date(),
+      messageId: messageId
     };
 
     setMessages(prev => [...prev, userMessage]);
@@ -106,16 +237,22 @@ const MedicalResearchGini = () => {
     setIsLoading(true);
 
     try {
+      // Prepare message data for n8n/Xata
+      const messageData = {
+        message: currentMessage,
+        sessionId: sessionId,
+        userId: userId,
+        messageId: messageId,
+        timestamp: new Date().toISOString()
+      };
+
+      // Send to n8n webhook (which will handle Xata storage and AI response)
       const response = await fetch(N8N_WEBHOOK_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          message: currentMessage,
-          userId: `user-${Date.now()}`,
-          timestamp: new Date().toISOString(),
-        }),
+        body: JSON.stringify(messageData),
       });
 
       if (!response.ok) {
@@ -153,7 +290,8 @@ const MedicalResearchGini = () => {
         content: responseText,
         timestamp: new Date(),
         truncated: data.truncated || false,
-        isHTML: isHTMLContent(responseText)
+        isHTML: isHTMLContent(responseText),
+        messageId: data.messageId || generateMessageId('gini') // Get messageId from n8n response
       };
 
       setMessages(prev => [...prev, botMessage]);
@@ -441,6 +579,52 @@ End of Drug Discovery Session
                     <p className="whitespace-pre-wrap">{message.content}</p>
                   )}
                 </div>
+
+                {/* Feedback Section - Only for Dr. Gini responses */}
+                {message.type === 'bot' && !message.isError && message.messageId && (
+                  <div className="flex items-center space-x-2 mt-2">
+                    {/* Quick Feedback Buttons */}
+                    <div className="flex items-center space-x-1">
+                      <button
+                        onClick={() => handleQuickFeedback(message.messageId, 'up')}
+                        className={`p-1 rounded transition-colors ${
+                          userFeedback[message.messageId]?.thumbs === 'up'
+                            ? 'bg-green-100 text-green-600'
+                            : 'hover:bg-gray-100 text-gray-500'
+                        }`}
+                        title="Helpful response"
+                      >
+                        <ThumbsUp className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleQuickFeedback(message.messageId, 'down')}
+                        className={`p-1 rounded transition-colors ${
+                          userFeedback[message.messageId]?.thumbs === 'down'
+                            ? 'bg-red-100 text-red-600'
+                            : 'hover:bg-gray-100 text-gray-500'
+                        }`}
+                        title="Not helpful"
+                      >
+                        <ThumbsDown className="w-4 h-4" />
+                      </button>
+                    </div>
+
+                    {/* Detailed Feedback Button */}
+                    <button
+                      onClick={() => openDetailedFeedback(message.messageId, message.content)}
+                      className={`flex items-center space-x-1 px-2 py-1 text-xs rounded transition-colors ${
+                        userFeedback[message.messageId]?.detailed
+                          ? 'bg-blue-100 text-blue-600'
+                          : 'hover:bg-gray-100 text-gray-500'
+                      }`}
+                      title="Provide detailed feedback"
+                    >
+                      <MessageSquare className="w-3 h-3" />
+                      <span>Feedback</span>
+                    </button>
+                  </div>
+                )}
+
                 <span className="text-xs text-gray-400 mt-1">
                   {formatTime(message.timestamp)}
                 </span>
@@ -546,10 +730,216 @@ End of Drug Discovery Session
         {/* Connection Status */}
         <div className="mt-2 text-xs text-gray-500 text-center">
           <span>🧬 Connected to PharmaTech Discovery Systems</span>
+          <br />
+          <span className="text-xs text-gray-400">
+            Session: {getSessionId().split('_')[1]} | Xata DB: ZAPAL01GRP01
+          </span>
+        </div>
+      </div>
+
+      {/* Detailed Feedback Modal */}
+      {feedbackModal.open && (
+        <DetailedFeedbackModal
+          isOpen={feedbackModal.open}
+          messageContent={feedbackModal.messageContent}
+          onClose={() => setFeedbackModal({ open: false, messageId: null, messageContent: '' })}
+          onSubmit={submitDetailedFeedback}
+        />
+      )}
+    </div>
+  );
+};
+
+// Detailed Feedback Modal Component
+const DetailedFeedbackModal = ({ isOpen, messageContent, onClose, onSubmit }) => {
+  const [feedback, setFeedback] = useState({
+    rating: 0,
+    accuracyRating: 0,
+    helpfulnessRating: 0,
+    comment: '',
+    improvementSuggestions: '',
+    userExpertise: 'intermediate'
+  });
+
+  const handleStarClick = (field, rating) => {
+    setFeedback(prev => ({ ...prev, [field]: rating }));
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    onSubmit(feedback);
+    // Reset form
+    setFeedback({
+      rating: 0,
+      accuracyRating: 0, 
+      helpfulnessRating: 0,
+      comment: '',
+      improvementSuggestions: '',
+      userExpertise: 'intermediate'
+    });
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="p-6">
+          {/* Header */}
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-semibold text-gray-900">Provide Detailed Feedback</h2>
+            <button
+              onClick={onClose}
+              className="text-gray-400 hover:text-gray-600"
+            >
+              <X className="w-6 h-6" />
+            </button>
+          </div>
+
+          {/* Message Preview */}
+          <div className="bg-gray-50 p-3 rounded-lg mb-6">
+            <p className="text-sm text-gray-600 mb-2">Dr. Gini's Response:</p>
+            <div 
+              className="text-sm max-h-32 overflow-y-auto"
+              dangerouslySetInnerHTML={{ 
+                __html: messageContent.length > 200 
+                  ? messageContent.substring(0, 200) + '...' 
+                  : messageContent 
+              }}
+            />
+          </div>
+
+          <form onSubmit={handleSubmit} className="space-y-6">
+            {/* Overall Rating */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Overall Rating
+              </label>
+              <div className="flex items-center space-x-1">
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <button
+                    key={star}
+                    type="button"
+                    onClick={() => handleStarClick('rating', star)}
+                    className={`p-1 ${
+                      star <= feedback.rating ? 'text-yellow-400' : 'text-gray-300'
+                    }`}
+                  >
+                    <Star className="w-6 h-6 fill-current" />
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Accuracy Rating */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Research Accuracy
+              </label>
+              <div className="flex items-center space-x-1">
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <button
+                    key={star}
+                    type="button"
+                    onClick={() => handleStarClick('accuracyRating', star)}
+                    className={`p-1 ${
+                      star <= feedback.accuracyRating ? 'text-blue-400' : 'text-gray-300'
+                    }`}
+                  >
+                    <Star className="w-5 h-5 fill-current" />
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Helpfulness Rating */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Helpfulness
+              </label>
+              <div className="flex items-center space-x-1">
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <button
+                    key={star}
+                    type="button"
+                    onClick={() => handleStarClick('helpfulnessRating', star)}
+                    className={`p-1 ${
+                      star <= feedback.helpfulnessRating ? 'text-green-400' : 'text-gray-300'
+                    }`}
+                  >
+                    <Star className="w-5 h-5 fill-current" />
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* User Expertise */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Your Research Background
+              </label>
+              <select
+                value={feedback.userExpertise}
+                onChange={(e) => setFeedback(prev => ({ ...prev, userExpertise: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="beginner">Beginner Researcher</option>
+                <option value="intermediate">Intermediate Researcher</option>
+                <option value="advanced">Advanced Researcher</option>
+                <option value="expert">Expert/Principal Investigator</option>
+              </select>
+            </div>
+
+            {/* Comments */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Additional Comments
+              </label>
+              <textarea
+                value={feedback.comment}
+                onChange={(e) => setFeedback(prev => ({ ...prev, comment: e.target.value }))}
+                placeholder="What did you think about this response? Was it helpful for your research?"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                rows="3"
+              />
+            </div>
+
+            {/* Improvement Suggestions */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Suggestions for Improvement
+              </label>
+              <textarea
+                value={feedback.improvementSuggestions}
+                onChange={(e) => setFeedback(prev => ({ ...prev, improvementSuggestions: e.target.value }))}
+                placeholder="How could Dr. Gini improve this type of response? What information was missing?"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                rows="3"
+              />
+            </div>
+
+            {/* Submit Buttons */}
+            <div className="flex space-x-3 pt-4">
+              <button
+                type="submit"
+                className="flex-1 bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                Submit Feedback
+              </button>
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-6 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500"
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
         </div>
       </div>
     </div>
   );
+};
 };
 
 export default MedicalResearchGini;
