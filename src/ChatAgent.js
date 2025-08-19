@@ -82,53 +82,54 @@ const MedicalResearchGini = () => {
       .trim();
   };
 
-  // Response Processing - OPTIMIZED FOR TEXT/HTML RESPONSE
+  // Response Processing - HANDLE JSON WITH HTML CONTENT
   const processResponse = async (response) => {
-    console.log('🔍 Processing text/HTML response...');
+    console.log('🔍 Processing response...');
     console.log('Response status:', response.status);
     console.log('Response headers:', Object.fromEntries(response.headers.entries()));
 
     try {
-      // Get response as text since webhook returns HTML directly
-      const htmlResponse = await response.text();
-      console.log('✅ Received HTML response length:', htmlResponse.length);
-      console.log('✅ HTML preview (first 300 chars):', htmlResponse.substring(0, 300) + '...');
+      // Try JSON first
+      const responseData = await response.json();
+      console.log('✅ Parsed JSON response:', responseData);
       
+      // Extract the AI response
+      let aiResponse = responseData.response || 
+                      responseData.output || 
+                      responseData.message || 
+                      'No response content found';
+
       // Validate the response
-      if (!htmlResponse || htmlResponse.trim() === '') {
-        throw new Error('Empty HTML response received');
+      if (!aiResponse || (typeof aiResponse === 'string' && aiResponse.trim() === '')) {
+        throw new Error('Empty response content received');
       }
 
-      // Clean up the HTML and ensure it's properly formatted
-      let cleanedHtml = htmlResponse
-        // Remove any potential wrapper elements that might cause issues
-        .replace(/^<!DOCTYPE[^>]*>/i, '')
-        .replace(/^<html[^>]*>/i, '')
-        .replace(/<\/html>$/i, '')
-        .replace(/^<head>.*?<\/head>/is, '')
-        .replace(/^<body[^>]*>/i, '')
-        .replace(/<\/body>$/i, '')
-        // Clean up extra whitespace but preserve HTML structure
-        .replace(/^\s+|\s+$/g, '')
-        // Ensure proper spacing between HTML elements
-        .replace(/>\s+</g, '><')
-        .replace(/(<\/[^>]+>)([^<])/g, '$1 $2')
-        .replace(/([^>])(<[^\/])/g, '$1 $2');
+      console.log('✅ Final AI response (first 200 chars):', String(aiResponse).substring(0, 200) + '...');
+      return aiResponse;
 
-      console.log('✅ Cleaned HTML ready for display');
-      return cleanedHtml;
-
-    } catch (parseError) {
-      console.error('❌ Error processing HTML response:', parseError);
+    } catch (jsonError) {
+      console.log('⚠️ JSON parsing failed, trying text...');
       
-      // Fallback handling
-      return `
-        <div style="color: #dc2626; background: #fef2f2; padding: 12px; border-radius: 6px; border: 1px solid #fecaca;">
-          <strong>Response Processing Error</strong><br/>
-          I encountered an issue processing the response. Please try again with a different query.
-          <br/><small>Error: ${parseError.message}</small>
-        </div>
-      `;
+      try {
+        // Fallback to text response
+        const textResponse = await response.text();
+        console.log('📝 Text response length:', textResponse.length);
+        
+        if (textResponse && textResponse.trim() !== '') {
+          return textResponse;
+        } else {
+          throw new Error('Empty text response');
+        }
+      } catch (textError) {
+        console.error('❌ Both JSON and text parsing failed:', textError);
+        return `
+          <div style="color: #dc2626; background: #fef2f2; padding: 12px; border-radius: 6px; border: 1px solid #fecaca;">
+            <strong>Response Processing Error</strong><br/>
+            Unable to process the response. Please try again.
+            <br/><small>Status: ${response.status}</small>
+          </div>
+        `;
+      }
     }
   };
 
@@ -184,9 +185,22 @@ const MedicalResearchGini = () => {
 
       if (!response.ok) {
         // Log the error response body for debugging
-        const errorText = await response.text();
-        console.error('❌ Error response body:', errorText);
-        throw new Error(`HTTP error! status: ${response.status} - ${response.statusText}. Response: ${errorText}`);
+        let errorText = '';
+        try {
+          errorText = await response.text();
+          console.error('❌ Error response body:', errorText);
+        } catch (e) {
+          console.error('❌ Could not read error response');
+        }
+        
+        // Handle specific error codes
+        if (response.status === 500) {
+          throw new Error(`Server error: The webhook encountered an internal error. Please check your n8n workflow configuration.`);
+        } else if (response.status === 404) {
+          throw new Error(`Webhook not found: Please verify your webhook URL is correct.`);
+        } else {
+          throw new Error(`HTTP error! status: ${response.status} - ${response.statusText}. ${errorText ? 'Response: ' + errorText : ''}`);
+        }
       }
 
       // Process the response using our improved function
