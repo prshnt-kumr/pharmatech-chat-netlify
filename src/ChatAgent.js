@@ -82,94 +82,82 @@ const MedicalResearchGini = () => {
       .trim();
   };
 
-  // Response Processing - OPTIMIZED FOR HTML FIRST
+  // Response Processing - HANDLE CLEAN HTML WITH NEWLINES
   const processResponse = async (response) => {
     console.log('🔍 Processing HTML response...');
     console.log('Response status:', response.status);
     console.log('Response headers:', Object.fromEntries(response.headers.entries()));
 
     try {
-      // Read the response as text (since it's always HTML)
-      const htmlContent = await response.text();
-      console.log('✅ HTML response length:', htmlContent.length);
-      console.log('✅ HTML preview (first 300 chars):', htmlContent.substring(0, 300) + '...');
+      // Read the response as text first
+      const responseText = await response.text();
+      console.log('✅ Response text length:', responseText.length);
+      console.log('✅ Response preview:', responseText.substring(0, 500) + '...');
 
-      // Validate the response
-      if (!htmlContent || htmlContent.trim() === '') {
-        throw new Error('Empty HTML response received');
-      }
+      let finalContent = responseText;
 
-      // Check if it's wrapped in JSON (sometimes webhooks do this)
-      if (htmlContent.trim().startsWith('{') && htmlContent.trim().endsWith('}')) {
+      // Check if it's wrapped in JSON array format like your example
+      if (responseText.trim().startsWith('[') && responseText.trim().endsWith(']')) {
         try {
-          console.log('🔄 Detected JSON wrapper, extracting HTML...');
-          const jsonData = JSON.parse(htmlContent);
-          const extractedHtml = jsonData.response || 
-                               jsonData.content || 
-                               jsonData.output || 
-                               jsonData.message ||
-                               htmlContent;
-          
-          console.log('✅ Extracted HTML from JSON wrapper');
-          return extractedHtml;
+          console.log('🔄 Detected JSON array, extracting content...');
+          const jsonArray = JSON.parse(responseText);
+          if (jsonArray.length > 0 && jsonArray[0].output) {
+            finalContent = jsonArray[0].output;
+            console.log('✅ Extracted from JSON array');
+          }
         } catch (jsonError) {
-          console.log('⚠️ JSON parsing failed, treating as raw HTML');
-          return htmlContent;
+          console.log('⚠️ JSON array parsing failed');
+        }
+      }
+      // Check if it's wrapped in JSON object
+      else if (responseText.trim().startsWith('{') && responseText.trim().endsWith('}')) {
+        try {
+          console.log('🔄 Detected JSON object, extracting content...');
+          const jsonData = JSON.parse(responseText);
+          finalContent = jsonData.output || jsonData.response || jsonData.content || responseText;
+          console.log('✅ Extracted from JSON object');
+        } catch (jsonError) {
+          console.log('⚠️ JSON object parsing failed');
         }
       }
 
-      // Clean up the HTML for better display (gentler cleaning)
-      let cleanedHtml = htmlContent;
-      
-      // Only remove document-level wrappers, keep content elements
-      cleanedHtml = cleanedHtml
-        .replace(/^<!DOCTYPE[^>]*>/i, '')
-        .replace(/^<html[^>]*>/i, '')
-        .replace(/<\/html>$/i, '')
-        .replace(/^<head>.*?<\/head>/is, '')
-        .replace(/^<body[^>]*>/i, '')
-        .replace(/<\/body>$/i, '')
+      // Convert escaped newlines to actual newlines for proper HTML rendering
+      if (typeof finalContent === 'string' && finalContent.includes('\\n')) {
+        console.log('🔄 Converting escaped newlines...');
+        finalContent = finalContent.replace(/\\n/g, '\n');
+      }
+
+      // Clean up any remaining issues
+      finalContent = finalContent
+        .replace(/^\s+|\s+$/g, '') // Trim whitespace
+        .replace(/\n\s*\n/g, '\n') // Remove extra blank lines
         .trim();
 
-      console.log('✅ HTML cleaned and ready for display');
-      console.log('🔍 Cleaned HTML length:', cleanedHtml.length);
-      console.log('🔍 Cleaned HTML preview:', cleanedHtml.substring(0, 300) + '...');
-      
-      // Check if we lost too much content during cleaning
-      if (cleanedHtml.length < htmlContent.length * 0.5) {
-        console.warn('⚠️ HTML cleaning removed too much content, using original');
-        // Use original content if cleaning removed too much
-        cleanedHtml = htmlContent;
-      }
-      
-      // Validate that we have actual content
-      if (cleanedHtml.length < 50) {
-        console.warn('⚠️ Final HTML is very short');
-        return `<div style="padding: 12px; background: #f3f4f6; border-radius: 6px;">
-          <p><strong>Content Processing Issue</strong></p>
-          <p>I received a response but it appears to be too short after processing.</p>
+      console.log('✅ Final content length:', finalContent.length);
+      console.log('✅ Final content preview:', finalContent.substring(0, 300) + '...');
+
+      // Validate we have content
+      if (!finalContent || finalContent.length < 20) {
+        console.warn('⚠️ Final content is too short');
+        return `<div style="padding: 12px; background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 6px;">
+          <p><strong>Content Issue</strong></p>
+          <p>Received a response but content appears empty after processing.</p>
           <details>
             <summary>Debug Info</summary>
-            <p>Original length: ${htmlContent.length}</p>
-            <p>Cleaned length: ${cleanedHtml.length}</p>
-            <div style="max-height: 200px; overflow-y: auto; background: #f9f9f9; padding: 8px; margin-top: 8px; font-family: monospace; font-size: 12px;">
-              ${htmlContent.replace(/</g, '&lt;').replace(/>/g, '&gt;')}
-            </div>
+            <pre style="font-size: 11px; background: #f8f9fa; padding: 8px; margin-top: 8px; max-height: 200px; overflow-y: auto;">${responseText}</pre>
           </details>
         </div>`;
       }
-      
-      return cleanedHtml;
+
+      return finalContent;
 
     } catch (readError) {
-      console.error('❌ Error reading HTML response:', readError);
-      return `
-        <div style="color: #dc2626; background: #fef2f2; padding: 12px; border-radius: 6px; border: 1px solid #fecaca;">
-          <strong>HTML Processing Error</strong><br/>
-          Unable to read the HTML response. Please try again.
-          <br/><small>Error: ${readError.message}</small>
-        </div>
-      `;
+      console.error('❌ Error reading response:', readError);
+      return `<div style="color: #dc2626; background: #fef2f2; padding: 12px; border-radius: 6px; border: 1px solid #fecaca;">
+        <strong>Response Processing Error</strong><br/>
+        Unable to read the response. Please try again.
+        <br/><small>Error: ${readError.message}</small>
+      </div>`;
     }
   };
 
