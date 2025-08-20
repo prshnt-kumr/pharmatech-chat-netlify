@@ -28,7 +28,7 @@ const MedicalResearchGini = () => {
 
   // Updated webhook URLs
   const N8N_WEBHOOK_URL = process.env.REACT_APP_N8N_WEBHOOK_URL || 'https://prshntkumrai.app.n8n.cloud/webhook/Chatbot';
-  const FEEDBACK_WEBHOOK_URL = 'https://prshntkumrai.app.n8n.cloud/webhook/webhook/Chatbot/feedback';
+  const FEEDBACK_WEBHOOK_URL = 'https://prshntkumrai.app.n8n.cloud/webhook-test/webhook/Chatbot/feedback';
 
   // Utility Functions
   const generateSessionId = () => `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -84,7 +84,7 @@ const MedicalResearchGini = () => {
       .trim();
   };
 
-  // FIXED: Enhanced Response Processing Function
+  // Response Processing - UNIVERSAL FORMAT HANDLER
   const processResponse = async (response) => {
     console.log('🔍 ===== UNIVERSAL RESPONSE PROCESSOR =====');
     console.log('Response status:', response.status);
@@ -97,57 +97,27 @@ const MedicalResearchGini = () => {
       // Get raw response text first
       const rawText = await response.text();
       console.log('📥 Raw response length:', rawText.length);
-      console.log('📥 Raw response preview:', rawText.substring(0, 300) + '...');
+      console.log('📥 Raw response preview:', rawText.substring(0, 200) + '...');
 
       let finalHtml = '';
 
       // AUTO-DETECT FORMAT AND PROCESS ACCORDINGLY
+      // IMPORTANT: Check iframe FIRST before checking for HTML tags
       
-      // 1. FIXED: Check for iframe wrapped content with better regex
+      // 1. Check for iframe wrapped content (YOUR EXACT FORMAT) - PRIORITY CHECK
       if (rawText.includes('<iframe') && rawText.includes('srcdoc=')) {
         console.log('🎯 AUTO-DETECTED: Iframe wrapped HTML (n8n format)');
         
-        // FIXED: Better iframe content extraction with proper quote handling
-        let iframeMatch = rawText.match(/<iframe[^>]*srcdoc="([^"]*(?:\\"[^"]*)*)"[^>]*>/is);
+        // Extract content from srcdoc attribute - handles both quoted and unquoted
+        const iframeMatch = rawText.match(/<iframe[^>]*srcdoc=["']([^"']*?)["'][^>]*>/is) || 
+                           rawText.match(/<iframe[^>]*srcdoc=([^>]*?)[\s>]/is);
         
-        // Fallback to single quote if double quote fails
-        if (!iframeMatch) {
-          iframeMatch = rawText.match(/<iframe[^>]*srcdoc='([^']*(?:\\'[^']*)*)'[^>]*>/is);
-        }
-        
-        // FIXED: More aggressive extraction for edge cases
-        if (!iframeMatch) {
-          // Try to extract content between srcdoc=" and " with escaped quotes
-          const srcdocStart = rawText.indexOf('srcdoc="');
-          if (srcdocStart !== -1) {
-            const contentStart = srcdocStart + 8; // length of 'srcdoc="'
-            let contentEnd = -1;
-            let quoteCount = 0;
-            
-            for (let i = contentStart; i < rawText.length; i++) {
-              if (rawText[i] === '"' && rawText[i-1] !== '\\') {
-                contentEnd = i;
-                break;
-              }
-            }
-            
-            if (contentEnd !== -1) {
-              const extractedContent = rawText.substring(contentStart, contentEnd);
-              iframeMatch = [null, extractedContent]; // Simulate regex match structure
-            }
-          }
-        }
-        
-        if (iframeMatch && iframeMatch[1]) {
+        if (iframeMatch) {
           let extractedContent = iframeMatch[1];
           console.log('📦 Raw srcdoc content length:', extractedContent.length);
           
-          // FIXED: More comprehensive HTML entity decoding in correct order
+          // Decode HTML entities that are commonly escaped in srcdoc
           extractedContent = extractedContent
-            // Handle escaped quotes first
-            .replace(/\\"/g, '"')
-            .replace(/\\'/g, "'")
-            // Then handle HTML entities
             .replace(/&quot;/g, '"')
             .replace(/&#34;/g, '"')
             .replace(/&apos;/g, "'")
@@ -156,24 +126,17 @@ const MedicalResearchGini = () => {
             .replace(/&#60;/g, '<')
             .replace(/&gt;/g, '>')
             .replace(/&#62;/g, '>')
-            .replace(/&nbsp;/g, ' ')
-            .replace(/&#160;/g, ' ')
-            // Handle &amp; LAST to avoid double-decoding
             .replace(/&amp;/g, '&')
-            .replace(/&#38;/g, '&');
+            .replace(/&#38;/g, '&')
+            .replace(/&nbsp;/g, ' ')
+            .replace(/&#160;/g, ' ');
           
           console.log('✅ Extracted and decoded iframe content');
           console.log('📝 Content preview:', extractedContent.substring(0, 200) + '...');
           finalHtml = extractedContent;
         } else {
           console.log('⚠️ iframe detected but srcdoc extraction failed');
-          // Better fallback - try to extract any HTML-like content
-          const htmlMatch = rawText.match(/<[^>]+>/);
-          if (htmlMatch) {
-            finalHtml = rawText;
-          } else {
-            finalHtml = `<p>${rawText}</p>`; // Wrap plain text in paragraph
-          }
+          finalHtml = rawText; // Fallback to raw text
         }
       }
       
@@ -206,7 +169,7 @@ const MedicalResearchGini = () => {
           console.log('✅ Extracted from JSON, length:', finalHtml.length);
         } catch (jsonError) {
           console.log('⚠️ JSON parsing failed:', jsonError.message);
-          finalHtml = `<p>${rawText}</p>`; // Wrap in paragraph instead of raw text
+          finalHtml = rawText; // Fallback to raw text
         }
       }
       
@@ -219,9 +182,7 @@ const MedicalResearchGini = () => {
       // 4. Plain text fallback
       else {
         console.log('🎯 AUTO-DETECTED: Plain text format');
-        // Wrap plain text in proper HTML paragraph with line break preservation
-        const formattedText = rawText.replace(/\n/g, '<br>');
-        finalHtml = `<p>${formattedText}</p>`;
+        finalHtml = rawText;
       }
 
       // PROCESS ESCAPED CHARACTERS (common in all formats)
@@ -229,7 +190,13 @@ const MedicalResearchGini = () => {
         // Handle escaped newlines
         if (finalHtml.includes('\\n')) {
           console.log('🔄 Converting escaped newlines');
-          finalHtml = finalHtml.replace(/\\n/g, '<br>');
+          finalHtml = finalHtml.replace(/\\n/g, '\n');
+        }
+        
+        // Handle escaped quotes
+        if (finalHtml.includes('\\"')) {
+          console.log('🔄 Converting escaped quotes');
+          finalHtml = finalHtml.replace(/\\"/g, '"');
         }
         
         // Handle unicode escapes
@@ -242,14 +209,14 @@ const MedicalResearchGini = () => {
       }
 
       // VALIDATE FINAL CONTENT
-      if (!finalHtml || finalHtml.trim().length < 3) {
+      if (!finalHtml || finalHtml.trim().length < 10) {
         console.warn('⚠️ Final content is too short');
         return `<div style="padding: 12px; background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 6px;">
           <p><strong>Content Processing Issue</strong></p>
-          <p>Processed response but content appears empty or too short.</p>
+          <p>Processed response but content appears empty.</p>
           <details>
             <summary>Debug - Raw Response</summary>
-            <pre style="font-size: 10px; background: #f8f9fa; padding: 8px; margin-top: 8px; max-height: 200px; overflow-y: auto;">${rawText.substring(0, 500)}</pre>
+            <pre style="font-size: 10px; background: #f8f9fa; padding: 8px; margin-top: 8px; max-height: 200px; overflow-y: auto;">${rawText}</pre>
           </details>
           <details>
             <summary>Debug - Processed Content</summary>
