@@ -26,7 +26,9 @@ const MedicalResearchGini = () => {
     }
   };
 
+  // Updated webhook URLs
   const N8N_WEBHOOK_URL = process.env.REACT_APP_N8N_WEBHOOK_URL || 'https://prshntkumrai.app.n8n.cloud/webhook/Chatbot';
+  const FEEDBACK_WEBHOOK_URL = 'https://prshntkumrai.app.n8n.cloud/webhook-test/webhook/Chatbot/feedback';
 
   // Utility Functions
   const generateSessionId = () => `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -389,7 +391,7 @@ const MedicalResearchGini = () => {
     }
   };
 
-  // Feedback Functions
+  // Updated Feedback Functions
   const handleQuickFeedback = async (messageId, rating) => {
     try {
       const feedback = {
@@ -401,19 +403,27 @@ const MedicalResearchGini = () => {
         userId: `user_${Date.now()}`
       };
 
-      await fetch(`${N8N_WEBHOOK_URL}/feedback`, {
+      console.log('📤 Sending quick feedback to:', FEEDBACK_WEBHOOK_URL);
+      console.log('📤 Feedback data:', feedback);
+
+      const response = await fetch(FEEDBACK_WEBHOOK_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(feedback)
       });
 
-      setUserFeedback(prev => ({
-        ...prev,
-        [messageId]: { ...prev[messageId], thumbs: rating }
-      }));
+      if (response.ok) {
+        console.log('✅ Quick feedback sent successfully');
+        setUserFeedback(prev => ({
+          ...prev,
+          [messageId]: { ...prev[messageId], thumbs: rating }
+        }));
+      } else {
+        console.error('❌ Failed to send quick feedback:', response.status);
+      }
 
     } catch (error) {
-      console.error('Error sending quick feedback:', error);
+      console.error('❌ Error sending quick feedback:', error);
     }
   };
 
@@ -436,25 +446,33 @@ const MedicalResearchGini = () => {
         userId: `user_${Date.now()}`
       };
 
-      await fetch(`${N8N_WEBHOOK_URL}/feedback`, {
+      console.log('📤 Sending detailed feedback to:', FEEDBACK_WEBHOOK_URL);
+      console.log('📤 Detailed feedback data:', feedback);
+
+      const response = await fetch(FEEDBACK_WEBHOOK_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(feedback)
       });
 
-      setUserFeedback(prev => ({
-        ...prev,
-        [feedbackModal.messageId]: { 
-          ...prev[feedbackModal.messageId], 
-          detailed: true,
-          rating: feedbackData.rating 
-        }
-      }));
+      if (response.ok) {
+        console.log('✅ Detailed feedback sent successfully');
+        setUserFeedback(prev => ({
+          ...prev,
+          [feedbackModal.messageId]: { 
+            ...prev[feedbackModal.messageId], 
+            detailed: true,
+            rating: feedbackData.rating 
+          }
+        }));
 
-      setFeedbackModal({ open: false, messageId: null, messageContent: '' });
+        setFeedbackModal({ open: false, messageId: null, messageContent: '' });
+      } else {
+        console.error('❌ Failed to send detailed feedback:', response.status);
+      }
 
     } catch (error) {
-      console.error('Error sending detailed feedback:', error);
+      console.error('❌ Error sending detailed feedback:', error);
     }
   };
 
@@ -900,7 +918,7 @@ End of Drug Discovery Session
           <span>🧬 Connected to PharmaTech Discovery Systems</span>
           <br />
           <span className="text-xs text-gray-400">
-            Session: {getSessionId().split('_')[1]} | Xata DB: ZAPAL01GRP01
+            Session: {getSessionId().split('_')[1]} | MongoDB Memory + Xata Feedback
           </span>
         </div>
       </div>
