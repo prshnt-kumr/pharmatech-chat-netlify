@@ -1,5 +1,5 @@
 ﻿import React, { useState, useRef, useEffect } from 'react';
-import { Send, Download, FileText, FileSpreadsheet, User, Loader2, ThumbsUp, ThumbsDown, MessageSquare, X, Star } from 'lucide-react';
+import { Send, Download, FileText, FileSpreadsheet, User, Loader2, ThumbsUp, ThumbsDown, MessageSquare, X, Star, Clock } from 'lucide-react';
 
 const MedicalResearchGini = () => {
   const [messages, setMessages] = useState([
@@ -14,9 +14,11 @@ const MedicalResearchGini = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [feedbackModal, setFeedbackModal] = useState({ open: false, messageId: null, messageContent: '' });
   const [userFeedback, setUserFeedback] = useState({});
+  const [lastRequestTime, setLastRequestTime] = useState(0);
+  const [cooldownTimeLeft, setCooldownTimeLeft] = useState(0);
   const messagesEndRef = useRef(null);
 
-  // Configuration
+  // Configuration - RESTORED
   const XATA_CONFIG = {
     baseURL: 'https://Prashant-Kumar-s-workspace-9seqfg.us-east-1.xata.sh/db/ZAPAL01GRP01:main',
     apiKey: process.env.REACT_APP_XATA_API_KEY || 'YOUR_XATA_API_KEY_HERE',
@@ -29,6 +31,7 @@ const MedicalResearchGini = () => {
   // Updated webhook URLs
   const N8N_WEBHOOK_URL = process.env.REACT_APP_N8N_WEBHOOK_URL || 'https://prshntkumrai.app.n8n.cloud/webhook/Chatbot';
   const FEEDBACK_WEBHOOK_URL = 'https://prshntkumrai.app.n8n.cloud/webhook/webhook/Chatbot/feedback';
+  const REQUEST_COOLDOWN = 180000; // 3 minutes in milliseconds
 
   // Utility Functions
   const generateSessionId = () => `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -51,7 +54,13 @@ const MedicalResearchGini = () => {
     return new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
-  // Content Processing Functions
+  const formatTimeLeft = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  // Content Processing Functions - RESTORED
   const isHTMLContent = (content) => /<[a-z][\s\S]*>/i.test(content);
 
   const formatHTMLContent = (htmlString) => {
@@ -84,7 +93,7 @@ const MedicalResearchGini = () => {
       .trim();
   };
 
-  // FIXED: Enhanced Response Processing Function
+  // ENHANCED: Response Processing Function with 3-minute throttling
   const processResponse = async (response) => {
     console.log('🔍 ===== UNIVERSAL RESPONSE PROCESSOR =====');
     console.log('Response status:', response.status);
@@ -103,11 +112,11 @@ const MedicalResearchGini = () => {
 
       // AUTO-DETECT FORMAT AND PROCESS ACCORDINGLY
       
-      // 1. FIXED: Check for iframe wrapped content with better regex
+      // 1. Check for iframe wrapped content with better regex
       if (rawText.includes('<iframe') && rawText.includes('srcdoc=')) {
         console.log('🎯 AUTO-DETECTED: Iframe wrapped HTML (n8n format)');
         
-        // FIXED: Better iframe content extraction with proper quote handling
+        // Better iframe content extraction with proper quote handling
         let iframeMatch = rawText.match(/<iframe[^>]*srcdoc="([^"]*(?:\\"[^"]*)*)"[^>]*>/is);
         
         // Fallback to single quote if double quote fails
@@ -115,14 +124,12 @@ const MedicalResearchGini = () => {
           iframeMatch = rawText.match(/<iframe[^>]*srcdoc='([^']*(?:\\'[^']*)*)'[^>]*>/is);
         }
         
-        // FIXED: More aggressive extraction for edge cases
+        // More aggressive extraction for edge cases
         if (!iframeMatch) {
-          // Try to extract content between srcdoc=" and " with escaped quotes
           const srcdocStart = rawText.indexOf('srcdoc="');
           if (srcdocStart !== -1) {
-            const contentStart = srcdocStart + 8; // length of 'srcdoc="'
+            const contentStart = srcdocStart + 8;
             let contentEnd = -1;
-            let quoteCount = 0;
             
             for (let i = contentStart; i < rawText.length; i++) {
               if (rawText[i] === '"' && rawText[i-1] !== '\\') {
@@ -133,7 +140,7 @@ const MedicalResearchGini = () => {
             
             if (contentEnd !== -1) {
               const extractedContent = rawText.substring(contentStart, contentEnd);
-              iframeMatch = [null, extractedContent]; // Simulate regex match structure
+              iframeMatch = [null, extractedContent];
             }
           }
         }
@@ -142,7 +149,7 @@ const MedicalResearchGini = () => {
           let extractedContent = iframeMatch[1];
           console.log('📦 Raw srcdoc content length:', extractedContent.length);
           
-          // FIXED: More comprehensive HTML entity decoding in correct order
+          // Comprehensive HTML entity decoding in correct order
           extractedContent = extractedContent
             // Handle escaped quotes first
             .replace(/\\"/g, '"')
@@ -167,12 +174,11 @@ const MedicalResearchGini = () => {
           finalHtml = extractedContent;
         } else {
           console.log('⚠️ iframe detected but srcdoc extraction failed');
-          // Better fallback - try to extract any HTML-like content
           const htmlMatch = rawText.match(/<[^>]+>/);
           if (htmlMatch) {
             finalHtml = rawText;
           } else {
-            finalHtml = `<p>${rawText}</p>`; // Wrap plain text in paragraph
+            finalHtml = `<p>${rawText}</p>`;
           }
         }
       }
@@ -184,7 +190,6 @@ const MedicalResearchGini = () => {
           const jsonData = JSON.parse(rawText);
           console.log('📦 JSON structure:', Object.keys(jsonData));
           
-          // Handle different JSON structures
           if (Array.isArray(jsonData)) {
             console.log('📋 JSON Array detected');
             if (jsonData.length > 0) {
@@ -206,7 +211,7 @@ const MedicalResearchGini = () => {
           console.log('✅ Extracted from JSON, length:', finalHtml.length);
         } catch (jsonError) {
           console.log('⚠️ JSON parsing failed:', jsonError.message);
-          finalHtml = `<p>${rawText}</p>`; // Wrap in paragraph instead of raw text
+          finalHtml = `<p>${rawText}</p>`;
         }
       }
       
@@ -219,20 +224,17 @@ const MedicalResearchGini = () => {
       // 4. Plain text fallback
       else {
         console.log('🎯 AUTO-DETECTED: Plain text format');
-        // Wrap plain text in proper HTML paragraph with line break preservation
         const formattedText = rawText.replace(/\n/g, '<br>');
         finalHtml = `<p>${formattedText}</p>`;
       }
 
       // PROCESS ESCAPED CHARACTERS (common in all formats)
       if (typeof finalHtml === 'string') {
-        // Handle escaped newlines
         if (finalHtml.includes('\\n')) {
           console.log('🔄 Converting escaped newlines');
           finalHtml = finalHtml.replace(/\\n/g, '<br>');
         }
         
-        // Handle unicode escapes
         if (finalHtml.includes('\\u')) {
           console.log('🔄 Converting unicode escapes');
           finalHtml = finalHtml.replace(/\\u([0-9a-fA-F]{4})/g, (match, code) => {
@@ -288,9 +290,45 @@ const MedicalResearchGini = () => {
     }
   };
 
-  // Main send message function
+  // NEW: Request throttling functions
+  const checkCooldown = () => {
+    const now = Date.now();
+    const timeSinceLastRequest = now - lastRequestTime;
+    
+    if (timeSinceLastRequest < REQUEST_COOLDOWN) {
+      const timeLeft = Math.ceil((REQUEST_COOLDOWN - timeSinceLastRequest) / 1000);
+      setCooldownTimeLeft(timeLeft);
+      return false;
+    }
+    
+    setCooldownTimeLeft(0);
+    return true;
+  };
+
+  // ENHANCED: Main send message function with throttling
   const sendMessage = async () => {
     if (!inputMessage.trim() || isLoading) return;
+
+    // NEW: Check cooldown
+    if (!checkCooldown()) {
+      const errorMsg = {
+        id: Date.now() + 1,
+        type: 'bot',
+        content: `Please wait ${formatTimeLeft(cooldownTimeLeft)} before sending another message. This helps ensure optimal response quality and prevents system overload.`,
+        timestamp: new Date(),
+        isError: true
+      };
+      setMessages(prev => [...prev, errorMsg]);
+      return;
+    }
+
+    // NEW: Prevent duplicate requests
+    if (window.requestInProgress) {
+      console.log('🚫 Request already in progress, ignoring duplicate');
+      return;
+    }
+
+    window.requestInProgress = true;
 
     const sessionId = getSessionId();
     const userId = `user_${Date.now()}`;
@@ -308,6 +346,7 @@ const MedicalResearchGini = () => {
     const currentMessage = inputMessage;
     setInputMessage('');
     setIsLoading(true);
+    setLastRequestTime(Date.now()); // NEW: Track request time
 
     try {
       const messageData = {
@@ -339,7 +378,6 @@ const MedicalResearchGini = () => {
       });
 
       if (!response.ok) {        
-        // Handle specific error codes without reading the body again
         if (response.status === 500) {
           throw new Error(`Server error (500): The webhook encountered an internal error. Please check your n8n workflow configuration.`);
         } else if (response.status === 404) {
@@ -351,16 +389,14 @@ const MedicalResearchGini = () => {
         }
       }
 
-      // Process the response using our improved function
       const aiResponse = await processResponse(response);
 
-      // Create bot message with HTML content
       const botMessage = {
         id: Date.now() + 1,
         type: 'bot',
         content: aiResponse,
         timestamp: new Date(),
-        isHTML: true, // Always treat as HTML since webhook returns HTML
+        isHTML: true,
         messageId: generateMessageId('gini')
       };
 
@@ -398,11 +434,12 @@ const MedicalResearchGini = () => {
       };
       setMessages(prev => [...prev, errorMsg]);
     } finally {
+      window.requestInProgress = false; // NEW: Clear request flag
       setIsLoading(false);
     }
   };
 
-  // Xata connection test
+  // RESTORED: Xata connection test
   const testXataConnection = async () => {
     try {
       const response = await fetch(`${XATA_CONFIG.baseURL}/tables/messages/query`, {
@@ -509,7 +546,7 @@ const MedicalResearchGini = () => {
     }
   };
 
-  // Download Functions
+  // RESTORED: Download Functions
   const downloadChatAsText = () => {
     const chatContent = messages
       .filter(msg => msg.type !== 'bot' || !msg.isError)
@@ -543,6 +580,7 @@ End of Drug Discovery Session
     document.body.removeChild(element);
   };
 
+  // RESTORED: Word download function
   const downloadChatAsWord = () => {
     const chatContent = messages
       .filter(msg => msg.type !== 'bot' || !msg.isError)
@@ -664,16 +702,29 @@ End of Drug Discovery Session
     };
   }, []);
 
+  // RESTORED: Xata connection test on mount
   useEffect(() => {
     testXataConnection();
   }, []);
 
+  // NEW: Cooldown timer effect
+  useEffect(() => {
+    if (cooldownTimeLeft > 0) {
+      const timer = setTimeout(() => {
+        setCooldownTimeLeft(cooldownTimeLeft - 1);
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [cooldownTimeLeft]);
+
+  const canSendMessage = cooldownTimeLeft === 0 && !isLoading && inputMessage.trim();
+
   return (
     <div className="flex flex-col h-screen bg-gray-50">
-      {/* Header */}
+      {/* RESTORED: Header with full SVG logo */}
       <div className="bg-gradient-to-r from-blue-900 to-blue-800 shadow-lg border-b px-6 py-4">
         <div className="flex items-center space-x-4">
-          {/* Logo */}
+          {/* RESTORED: Logo */}
           <svg width="64" height="64" viewBox="0 0 120 120" className="w-16 h-16">
             <defs>
               <linearGradient id="logoGradient" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -883,7 +934,7 @@ End of Drug Discovery Session
 
       {/* Input Area */}
       <div className="bg-white border-t px-6 py-4">
-        {/* Download Section */}
+        {/* RESTORED: Download Section */}
         {messages.length > 1 && (
           <div className="mb-4 pb-4 border-b border-gray-200">
             <div className="flex items-center justify-between">
@@ -918,6 +969,18 @@ End of Drug Discovery Session
           </div>
         )}
 
+        {/* NEW: Cooldown Notice */}
+        {cooldownTimeLeft > 0 && (
+          <div className="mb-4 p-3 bg-orange-50 border border-orange-200 rounded-lg">
+            <div className="flex items-center space-x-2">
+              <Clock className="w-4 h-4 text-orange-600" />
+              <span className="text-sm text-orange-700">
+                Please wait {formatTimeLeft(cooldownTimeLeft)} before sending another message. This helps ensure optimal response quality.
+              </span>
+            </div>
+          </div>
+        )}
+
         {/* Message Input */}
         <div className="flex space-x-4">
           <div className="flex-1 relative">
@@ -929,12 +992,12 @@ End of Drug Discovery Session
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
               rows="1"
               style={{ minHeight: '50px', maxHeight: '120px' }}
-              disabled={isLoading}
+              disabled={isLoading || cooldownTimeLeft > 0}
             />
           </div>
           <button
             onClick={sendMessage}
-            disabled={!inputMessage.trim() || isLoading}
+            disabled={!canSendMessage}
             className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center space-x-2"
           >
             {isLoading ? (
@@ -946,7 +1009,7 @@ End of Drug Discovery Session
           </button>
         </div>
         
-        {/* Connection Status */}
+        {/* RESTORED: Connection Status */}
         <div className="mt-2 text-xs text-gray-500 text-center">
           <span>🧬 Connected to PharmaTech Discovery Systems</span>
           <br />
@@ -969,7 +1032,7 @@ End of Drug Discovery Session
   );
 };
 
-// Detailed Feedback Modal Component
+// RESTORED: Detailed Feedback Modal Component
 const DetailedFeedbackModal = ({ isOpen, messageContent, onClose, onSubmit }) => {
   const [feedback, setFeedback] = useState({
     rating: 0,
