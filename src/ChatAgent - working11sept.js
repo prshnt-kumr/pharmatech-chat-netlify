@@ -18,7 +18,7 @@ const MedicalResearchGini = () => {
   const [cooldownTimeLeft, setCooldownTimeLeft] = useState(0);
   const messagesEndRef = useRef(null);
 
-  // Configuration
+  // Configuration - RESTORED
   const XATA_CONFIG = {
     baseURL: 'https://Prashant-Kumar-s-workspace-9seqfg.us-east-1.xata.sh/db/ZAPAL01GRP01:main',
     apiKey: process.env.REACT_APP_XATA_API_KEY || 'YOUR_XATA_API_KEY_HERE',
@@ -36,50 +36,6 @@ const MedicalResearchGini = () => {
   // Utility Functions
   const generateSessionId = () => `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   const generateMessageId = (type) => `${type}_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
-  
-  // Enhanced text cleaning function
-  const cleanSpecialCharacters = (text) => {
-    if (!text || typeof text !== 'string') return text;
-    
-    return text
-      // Remove markdown formatting artifacts
-      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-      .replace(/\*(.*?)\*/g, '<em>$1</em>')
-      .replace(/#{1,6}\s+(.*?)(?:\n|$)/g, '<h3>$1</h3>')
-      
-      // Clean bullet points and lists
-      .replace(/^[\s]*[-*+]\s+/gm, '• ')
-      .replace(/^\s*\d+\.\s+/gm, (match, offset, string) => {
-        const lineStart = string.lastIndexOf('\n', offset) + 1;
-        const lineNum = string.substring(0, offset).split('\n').length;
-        return `${lineNum}. `;
-      })
-      
-      // Fix common escape sequences
-      .replace(/\\n/g, '<br>')
-      .replace(/\\t/g, '&nbsp;&nbsp;&nbsp;&nbsp;')
-      .replace(/\\"/g, '"')
-      .replace(/\\'/g, "'")
-      
-      // Clean HTML entities
-      .replace(/&nbsp;/g, ' ')
-      .replace(/&quot;/g, '"')
-      .replace(/&apos;/g, "'")
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>')
-      .replace(/&amp;/g, '&')
-      
-      // Remove excessive whitespace
-      .replace(/\n{3,}/g, '\n\n')
-      .replace(/\s{3,}/g, ' ')
-      .replace(/^\s+|\s+$/gm, '')
-      
-      // Clean up chemical formulas and subscripts
-      .replace(/([A-Z][a-z]?)(\d+)/g, '$1<sub>$2</sub>')
-      .replace(/\^(\d+)/g, '<sup>$1</sup>')
-      
-      .trim();
-  };
   
   const getSessionId = () => {
     let sessionId = localStorage.getItem('dr_gini_session_id');
@@ -104,11 +60,11 @@ const MedicalResearchGini = () => {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // Content Processing Functions
+  // Content Processing Functions - RESTORED
   const isHTMLContent = (content) => /<[a-z][\s\S]*>/i.test(content);
 
   const formatHTMLContent = (htmlString) => {
-    const allowedTags = ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'br', 'strong', 'em', 'ul', 'ol', 'li', 'div', 'span', 'sub', 'sup'];
+    const allowedTags = ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'br', 'strong', 'em', 'ul', 'ol', 'li', 'div', 'span'];
     
     return htmlString
       .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
@@ -132,49 +88,12 @@ const MedicalResearchGini = () => {
       .replace(/<ol[^>]*>|<\/ol>/g, '\n')
       .replace(/<strong[^>]*>(.*?)<\/strong>/g, '$1')
       .replace(/<em[^>]*>(.*?)<\/em>/g, '$1')
-      .replace(/<sub[^>]*>(.*?)<\/sub>/g, '$1')
-      .replace(/<sup[^>]*>(.*?)<\/sup>/g, '$1')
       .replace(/<[^>]*>/g, '')
       .replace(/\n\n+/g, '\n\n')
       .trim();
   };
 
-  // Enhanced message content renderer
-  const renderMessageContent = (message) => {
-    if (message.isHTML && message.type === 'bot') {
-      const cleanedContent = cleanSpecialCharacters(message.content);
-      
-      return (
-        <div 
-          className="research-content"
-          dangerouslySetInnerHTML={{ 
-            __html: formatHTMLContent(cleanedContent) 
-          }}
-          style={{
-            lineHeight: '1.7',
-            fontSize: '14px',
-            color: '#374151',
-            maxHeight: 'none',
-            overflow: 'visible',
-            wordBreak: 'break-word',
-            width: '100%'
-          }}
-        />
-      );
-    } else {
-      const cleanedText = cleanSpecialCharacters(message.content);
-      
-      return (
-        <div 
-          className="whitespace-pre-wrap research-content" 
-          style={{ maxHeight: 'none', overflow: 'visible' }}
-          dangerouslySetInnerHTML={{ __html: cleanedText }}
-        />
-      );
-    }
-  };
-
-  // ENHANCED: Response Processing Function with improved cleaning
+  // ENHANCED: Response Processing Function with 3-minute throttling
   const processResponse = async (response) => {
     console.log('🔍 ===== UNIVERSAL RESPONSE PROCESSOR =====');
     console.log('Response status:', response.status);
@@ -341,8 +260,8 @@ const MedicalResearchGini = () => {
         </div>`;
       }
 
-      // Enhanced final cleanup with special character processing
-      const preliminaryClean = finalHtml
+      // FINAL CLEANUP
+      const cleanedHtml = finalHtml
         .replace(/^<!DOCTYPE[^>]*>/i, '')
         .replace(/^<html[^>]*>/i, '')
         .replace(/<\/html>$/i, '')
@@ -350,9 +269,6 @@ const MedicalResearchGini = () => {
         .replace(/^<body[^>]*>/i, '')
         .replace(/<\/body>$/i, '')
         .trim();
-
-      // Apply special character cleaning
-      const cleanedHtml = cleanSpecialCharacters(preliminaryClean);
 
       console.log('✅ FINAL PROCESSED HTML:');
       console.log('   Length:', cleanedHtml.length);
@@ -374,7 +290,7 @@ const MedicalResearchGini = () => {
     }
   };
 
-  // Request throttling functions
+  // NEW: Request throttling functions
   const checkCooldown = () => {
     const now = Date.now();
     const timeSinceLastRequest = now - lastRequestTime;
@@ -389,11 +305,11 @@ const MedicalResearchGini = () => {
     return true;
   };
 
-  // Main send message function with throttling
+  // ENHANCED: Main send message function with throttling
   const sendMessage = async () => {
     if (!inputMessage.trim() || isLoading) return;
 
-    // Check cooldown
+    // NEW: Check cooldown
     if (!checkCooldown()) {
       const errorMsg = {
         id: Date.now() + 1,
@@ -406,7 +322,7 @@ const MedicalResearchGini = () => {
       return;
     }
 
-    // Prevent duplicate requests
+    // NEW: Prevent duplicate requests
     if (window.requestInProgress) {
       console.log('🚫 Request already in progress, ignoring duplicate');
       return;
@@ -430,7 +346,7 @@ const MedicalResearchGini = () => {
     const currentMessage = inputMessage;
     setInputMessage('');
     setIsLoading(true);
-    setLastRequestTime(Date.now());
+    setLastRequestTime(Date.now()); // NEW: Track request time
 
     try {
       const messageData = {
@@ -518,12 +434,12 @@ const MedicalResearchGini = () => {
       };
       setMessages(prev => [...prev, errorMsg]);
     } finally {
-      window.requestInProgress = false;
+      window.requestInProgress = false; // NEW: Clear request flag
       setIsLoading(false);
     }
   };
 
-  // Xata connection test
+  // RESTORED: Xata connection test
   const testXataConnection = async () => {
     try {
       const response = await fetch(`${XATA_CONFIG.baseURL}/tables/messages/query`, {
@@ -545,7 +461,7 @@ const MedicalResearchGini = () => {
     }
   };
 
-  // Feedback Functions
+  // Updated Feedback Functions
   const handleQuickFeedback = async (messageId, rating) => {
     try {
       const feedback = {
@@ -630,7 +546,7 @@ const MedicalResearchGini = () => {
     }
   };
 
-  // Download Functions
+  // RESTORED: Download Functions
   const downloadChatAsText = () => {
     const chatContent = messages
       .filter(msg => msg.type !== 'bot' || !msg.isError)
@@ -664,6 +580,7 @@ End of Drug Discovery Session
     document.body.removeChild(element);
   };
 
+  // RESTORED: Word download function
   const downloadChatAsWord = () => {
     const chatContent = messages
       .filter(msg => msg.type !== 'bot' || !msg.isError)
@@ -743,106 +660,39 @@ End of Drug Discovery Session
         overflow: visible !important;
         word-wrap: break-word;
         overflow-wrap: break-word;
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-        text-rendering: optimizeLegibility;
-        -webkit-font-smoothing: antialiased;
-        -moz-osx-font-smoothing: grayscale;
       }
-      
-      .research-content h1, .research-content h2 {
+      .research-content h2 {
         color: #1e40af;
         font-size: 18px;
         font-weight: bold;
-        margin: 20px 0 12px 0;
+        margin: 16px 0 12px 0;
         border-bottom: 2px solid #e5e7eb;
         padding-bottom: 6px;
-        line-height: 1.3;
       }
-      
       .research-content h3 {
         color: #059669;
         font-size: 16px;
-        font-weight: 600;
-        margin: 16px 0 8px 0;
-        line-height: 1.4;
-      }
-      
-      .research-content p {
-        margin: 10px 0;
-        line-height: 1.7;
-        color: #374151;
-      }
-      
-      .research-content strong, .research-content b {
-        color: #1f2937;
-        font-weight: 600;
-      }
-      
-      .research-content em, .research-content i {
-        color: #4b5563;
-        font-style: italic;
-      }
-      
-      .research-content ul {
-        margin: 12px 0;
-        padding-left: 24px;
-        list-style-type: none;
-      }
-      
-      .research-content ul li {
-        margin: 8px 0;
-        line-height: 1.6;
-        position: relative;
-      }
-      
-      .research-content ul li::before {
-        content: "•";
-        color: #059669;
         font-weight: bold;
-        position: absolute;
-        left: -16px;
+        margin: 14px 0 8px 0;
       }
-      
-      .research-content ol {
-        margin: 12px 0;
-        padding-left: 24px;
-        counter-reset: list-counter;
-      }
-      
-      .research-content ol li {
+      .research-content p {
         margin: 8px 0;
         line-height: 1.6;
-        counter-increment: list-counter;
       }
-      
-      .research-content ol li::marker {
-        color: #059669;
+      .research-content strong {
+        color: #374151;
         font-weight: 600;
       }
-      
-      .research-content sub {
-        font-size: 0.75em;
-        line-height: 0;
-        position: relative;
-        vertical-align: baseline;
-        bottom: -0.25em;
+      .research-content ul {
+        margin: 8px 0;
+        padding-left: 20px;
       }
-      
-      .research-content sup {
-        font-size: 0.75em;
-        line-height: 0;
-        position: relative;
-        vertical-align: baseline;
-        top: -0.5em;
+      .research-content li {
+        margin: 6px 0;
+        line-height: 1.5;
       }
-      
-      .research-content code {
-        background-color: #f3f4f6;
-        padding: 2px 4px;
-        border-radius: 3px;
-        font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-        font-size: 0.9em;
-        color: #e11d48;
+      .research-content ul li::marker {
+        color: #059669;
       }
     `;
     document.head.appendChild(style);
@@ -852,11 +702,12 @@ End of Drug Discovery Session
     };
   }, []);
 
+  // RESTORED: Xata connection test on mount
   useEffect(() => {
     testXataConnection();
   }, []);
 
-  // Cooldown timer effect
+  // NEW: Cooldown timer effect
   useEffect(() => {
     if (cooldownTimeLeft > 0) {
       const timer = setTimeout(() => {
@@ -870,9 +721,10 @@ End of Drug Discovery Session
 
   return (
     <div className="flex flex-col h-screen bg-gray-50">
-      {/* Header with full SVG logo */}
+      {/* RESTORED: Header with full SVG logo */}
       <div className="bg-gradient-to-r from-blue-900 to-blue-800 shadow-lg border-b px-6 py-4">
         <div className="flex items-center space-x-4">
+          {/* RESTORED: Logo */}
           <svg width="64" height="64" viewBox="0 0 120 120" className="w-16 h-16">
             <defs>
               <linearGradient id="logoGradient" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -977,7 +829,27 @@ End of Drug Discovery Session
                       ? 'bg-red-50 text-red-800 border border-red-200'
                       : 'bg-white text-gray-800 border border-gray-200'
                 }`} style={{ maxHeight: 'none', overflow: 'visible' }}>
-                  {renderMessageContent(message)}
+                  {message.isHTML && message.type === 'bot' ? (
+                    <div 
+                      className="research-content"
+                      dangerouslySetInnerHTML={{ 
+                        __html: formatHTMLContent(message.content) 
+                      }}
+                      style={{
+                        lineHeight: '1.7',
+                        fontSize: '14px',
+                        color: '#374151',
+                        maxHeight: 'none',
+                        overflow: 'visible',
+                        wordBreak: 'break-word',
+                        width: '100%'
+                      }}
+                    />
+                  ) : (
+                    <div className="whitespace-pre-wrap" style={{ maxHeight: 'none', overflow: 'visible' }}>
+                      {message.content}
+                    </div>
+                  )}
                 </div>
 
                 {/* Feedback Section */}
@@ -1062,7 +934,7 @@ End of Drug Discovery Session
 
       {/* Input Area */}
       <div className="bg-white border-t px-6 py-4">
-        {/* Download Section */}
+        {/* RESTORED: Download Section */}
         {messages.length > 1 && (
           <div className="mb-4 pb-4 border-b border-gray-200">
             <div className="flex items-center justify-between">
@@ -1097,7 +969,7 @@ End of Drug Discovery Session
           </div>
         )}
 
-        {/* Cooldown Notice */}
+        {/* NEW: Cooldown Notice */}
         {cooldownTimeLeft > 0 && (
           <div className="mb-4 p-3 bg-orange-50 border border-orange-200 rounded-lg">
             <div className="flex items-center space-x-2">
@@ -1137,7 +1009,7 @@ End of Drug Discovery Session
           </button>
         </div>
         
-        {/* Connection Status */}
+        {/* RESTORED: Connection Status */}
         <div className="mt-2 text-xs text-gray-500 text-center">
           <span>🧬 Connected to PharmaTech Discovery Systems</span>
           <br />
@@ -1160,7 +1032,7 @@ End of Drug Discovery Session
   );
 };
 
-// Detailed Feedback Modal Component
+// RESTORED: Detailed Feedback Modal Component
 const DetailedFeedbackModal = ({ isOpen, messageContent, onClose, onSubmit }) => {
   const [feedback, setFeedback] = useState({
     rating: 0,
