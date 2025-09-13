@@ -503,7 +503,7 @@ const MedicalResearchGini = () => {
       
       // ENHANCED: Better error handling with specific timeout handling
       if (error.name === 'AbortError') {
-        errorMessage += 'The request timed out after 90 seconds. Please try a shorter query or check your connection.';
+        errorMessage += 'The request timed out after 180 seconds (3 minutes). Please try a shorter query or check your connection.';
       } else if (error.message.includes('JSON')) {
         errorMessage += 'There was a formatting issue with the response.';
       } else if (error.message.includes('timeout')) {
