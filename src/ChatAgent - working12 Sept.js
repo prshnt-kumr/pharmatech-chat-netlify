@@ -1,23 +1,21 @@
 ﻿import React, { useState, useRef, useEffect } from 'react';
-import { Send, Download, FileText, FileSpreadsheet, User, Loader2, ThumbsUp, ThumbsDown, MessageSquare, X, Star, Clock, Image, Beaker, Atom, Eye, EyeOff } from 'lucide-react';
+import { Send, Download, FileText, FileSpreadsheet, User, Loader2, ThumbsUp, ThumbsDown, MessageSquare, X, Star, Clock } from 'lucide-react';
 
 const MedicalResearchGini = () => {
   const [messages, setMessages] = useState([
     {
       id: 1,
       type: 'bot',
-      content: 'Hello! I\'m Dr. Gini, your AI-powered drug discovery specialist from PharmaTech Innovations. I specialize in early-stage drug discovery, from target identification to lead optimization. I can show you molecular structures, 2D/3D visualizations, and research data. How can I assist you with your drug discovery research today?',
+      content: 'Hello! I\'m Dr. Gini, your AI-powered drug discovery specialist from PharmaTech Innovations. I specialize in early-stage drug discovery, from target identification to lead optimization. How can I assist you with your drug discovery research today?',
       timestamp: new Date(),
     }
   ]);
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [isGeneratingImage, setIsGeneratingImage] = useState(false);
   const [feedbackModal, setFeedbackModal] = useState({ open: false, messageId: null, messageContent: '' });
   const [userFeedback, setUserFeedback] = useState({});
   const [lastRequestTime, setLastRequestTime] = useState(0);
   const [cooldownTimeLeft, setCooldownTimeLeft] = useState(0);
-  const [imageViewMode, setImageViewMode] = useState('inline'); // 'inline', 'modal', 'hidden'
   const messagesEndRef = useRef(null);
 
   // Configuration
@@ -30,9 +28,8 @@ const MedicalResearchGini = () => {
     }
   };
 
-  // Enhanced webhook URLs with image generation
+  // Updated webhook URLs
   const N8N_WEBHOOK_URL = process.env.REACT_APP_N8N_WEBHOOK_URL || 'https://prshntkumrai.app.n8n.cloud/webhook/Chatbot';
-  const IMAGE_GENERATION_WEBHOOK = process.env.REACT_APP_N8N_IMAGE_WEBHOOK || 'https://prshntkumrai.app.n8n.cloud/webhook/generate-molecular-image';
   const FEEDBACK_WEBHOOK_URL = 'https://prshntkumrai.app.n8n.cloud/webhook/webhook/Chatbot/feedback';
   const REQUEST_COOLDOWN = 180000; // 3 minutes in milliseconds
 
@@ -40,114 +37,6 @@ const MedicalResearchGini = () => {
   const generateSessionId = () => `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   const generateMessageId = (type) => `${type}_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
   
-  // Enhanced image detection logic
-  const detectImageRequirement = (message) => {
-    const imageKeywords = [
-      // Structure requests
-      'structure', 'molecular structure', 'chemical structure', 'show structure',
-      'visualize', 'visualization', 'diagram', 'image', 'picture',
-      // 2D/3D requests  
-      '2d', '3d', 'three dimensional', 'two dimensional', 'render',
-      // Molecular terms
-      'molecule', 'compound', 'formula', 'bond', 'conformation',
-      // Specific requests
-      'show me', 'display', 'draw', 'generate image', 'create visualization'
-    ];
-    
-    const molecularCompounds = [
-      'chromene', 'benzene', 'caffeine', 'aspirin', 'penicillin', 
-      'dopamine', 'serotonin', 'acetaminophen', 'ibuprofen'
-    ];
-    
-    const lowerMessage = message.toLowerCase();
-    
-    // Check for explicit image requests
-    const hasImageKeyword = imageKeywords.some(keyword => lowerMessage.includes(keyword));
-    
-    // Check for molecular compound names
-    const hasMolecularCompound = molecularCompounds.some(compound => lowerMessage.includes(compound));
-    
-    // Check for chemical formulas (e.g., C9H8O, H2O, etc.)
-    const hasChemicalFormula = /[A-Z][a-z]?\d*([A-Z][a-z]?\d*)*/g.test(message);
-    
-    return {
-      needsImage: hasImageKeyword || (hasMolecularCompound && (hasImageKeyword || lowerMessage.includes('structure'))),
-      imageType: lowerMessage.includes('3d') ? '3d' : '2d',
-      compound: extractCompoundName(message),
-      confidence: hasImageKeyword ? 'high' : hasMolecularCompound ? 'medium' : 'low'
-    };
-  };
-  
-  // Extract compound name from message
-  const extractCompoundName = (message) => {
-    const compounds = ['chromene', 'benzene', 'caffeine', 'aspirin', 'penicillin', 'dopamine', 'serotonin'];
-    const found = compounds.find(compound => message.toLowerCase().includes(compound));
-    
-    // Also try to extract from chemical formulas
-    const formulaMatch = message.match(/([A-Z][a-z]?\d*)+/g);
-    
-    return found || (formulaMatch && formulaMatch[0]) || 'unknown';
-  };
-
-  // Enhanced image generation function
-  const generateMolecularImage = async (compound, imageType = '2d') => {
-    try {
-      setIsGeneratingImage(true);
-      
-      console.log(`🎨 Generating ${imageType.toUpperCase()} image for: ${compound}`);
-      
-      const imageRequest = {
-        compound: compound,
-        imageType: imageType,
-        format: 'png',
-        size: imageType === '3d' ? 'large' : 'medium',
-        timestamp: new Date().toISOString()
-      };
-
-      const response = await fetch(IMAGE_GENERATION_WEBHOOK, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(imageRequest)
-      });
-
-      if (response.ok) {
-        const imageData = await response.json();
-        console.log('✅ Image generated successfully');
-        return imageData.imageUrl || imageData.image_url || null;
-      } else {
-        console.error('❌ Image generation failed:', response.status);
-        return null;
-      }
-    } catch (error) {
-      console.error('❌ Image generation error:', error);
-      return null;
-    } finally {
-      setIsGeneratingImage(false);
-    }
-  };
-
-  // Fallback image URLs for common compounds
-  const getFallbackImageUrl = (compound, imageType) => {
-    const fallbackImages = {
-      'chromene': {
-        '2d': 'https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/chromene/PNG',
-        '3d': 'https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/chromene/PNG?record_type=3d'
-      },
-      'benzene': {
-        '2d': 'https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/benzene/PNG',
-        '3d': 'https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/benzene/PNG?record_type=3d'
-      },
-      'caffeine': {
-        '2d': 'https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/caffeine/PNG',
-        '3d': 'https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/caffeine/PNG?record_type=3d'
-      }
-    };
-    
-    return fallbackImages[compound.toLowerCase()]?.[imageType] || null;
-  };
-
   // Enhanced text cleaning function
   const cleanSpecialCharacters = (text) => {
     if (!text || typeof text !== 'string') return text;
@@ -219,7 +108,7 @@ const MedicalResearchGini = () => {
   const isHTMLContent = (content) => /<[a-z][\s\S]*>/i.test(content);
 
   const formatHTMLContent = (htmlString) => {
-    const allowedTags = ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'br', 'strong', 'em', 'ul', 'ol', 'li', 'div', 'span', 'sub', 'sup', 'img'];
+    const allowedTags = ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'br', 'strong', 'em', 'ul', 'ol', 'li', 'div', 'span', 'sub', 'sup'];
     
     return htmlString
       .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
@@ -245,13 +134,12 @@ const MedicalResearchGini = () => {
       .replace(/<em[^>]*>(.*?)<\/em>/g, '$1')
       .replace(/<sub[^>]*>(.*?)<\/sub>/g, '$1')
       .replace(/<sup[^>]*>(.*?)<\/sup>/g, '$1')
-      .replace(/<img[^>]*>/g, '[Image]')
       .replace(/<[^>]*>/g, '')
       .replace(/\n\n+/g, '\n\n')
       .trim();
   };
 
-  // Enhanced message content renderer with image support
+  // Enhanced message content renderer
   const renderMessageContent = (message) => {
     if (message.isHTML && message.type === 'bot') {
       const cleanedContent = cleanSpecialCharacters(message.content);
@@ -286,36 +174,68 @@ const MedicalResearchGini = () => {
     }
   };
 
-  // Enhanced response processing with image integration
-  const processResponse = async (response, originalMessage = '') => {
-    console.log('🔍 ===== UNIVERSAL RESPONSE PROCESSOR WITH IMAGES =====');
+  // ENHANCED: Response Processing Function with improved cleaning
+  const processResponse = async (response) => {
+    console.log('🔍 ===== UNIVERSAL RESPONSE PROCESSOR =====');
     console.log('Response status:', response.status);
+    console.log('Response headers:', Object.fromEntries(response.headers.entries()));
     
     const contentType = response.headers.get('content-type') || '';
     console.log('Content-Type:', contentType);
 
     try {
+      // Get raw response text first
       const rawText = await response.text();
       console.log('📥 Raw response length:', rawText.length);
+      console.log('📥 Raw response preview:', rawText.substring(0, 300) + '...');
 
       let finalHtml = '';
 
-      // Process response (existing logic)
+      // AUTO-DETECT FORMAT AND PROCESS ACCORDINGLY
+      
+      // 1. Check for iframe wrapped content with better regex
       if (rawText.includes('<iframe') && rawText.includes('srcdoc=')) {
         console.log('🎯 AUTO-DETECTED: Iframe wrapped HTML (n8n format)');
         
+        // Better iframe content extraction with proper quote handling
         let iframeMatch = rawText.match(/<iframe[^>]*srcdoc="([^"]*(?:\\"[^"]*)*)"[^>]*>/is);
         
+        // Fallback to single quote if double quote fails
         if (!iframeMatch) {
           iframeMatch = rawText.match(/<iframe[^>]*srcdoc='([^']*(?:\\'[^']*)*)'[^>]*>/is);
         }
         
+        // More aggressive extraction for edge cases
+        if (!iframeMatch) {
+          const srcdocStart = rawText.indexOf('srcdoc="');
+          if (srcdocStart !== -1) {
+            const contentStart = srcdocStart + 8;
+            let contentEnd = -1;
+            
+            for (let i = contentStart; i < rawText.length; i++) {
+              if (rawText[i] === '"' && rawText[i-1] !== '\\') {
+                contentEnd = i;
+                break;
+              }
+            }
+            
+            if (contentEnd !== -1) {
+              const extractedContent = rawText.substring(contentStart, contentEnd);
+              iframeMatch = [null, extractedContent];
+            }
+          }
+        }
+        
         if (iframeMatch && iframeMatch[1]) {
           let extractedContent = iframeMatch[1];
+          console.log('📦 Raw srcdoc content length:', extractedContent.length);
           
+          // Comprehensive HTML entity decoding in correct order
           extractedContent = extractedContent
+            // Handle escaped quotes first
             .replace(/\\"/g, '"')
             .replace(/\\'/g, "'")
+            // Then handle HTML entities
             .replace(/&quot;/g, '"')
             .replace(/&#34;/g, '"')
             .replace(/&apos;/g, "'")
@@ -326,23 +246,39 @@ const MedicalResearchGini = () => {
             .replace(/&#62;/g, '>')
             .replace(/&nbsp;/g, ' ')
             .replace(/&#160;/g, ' ')
+            // Handle &amp; LAST to avoid double-decoding
             .replace(/&amp;/g, '&')
             .replace(/&#38;/g, '&');
           
+          console.log('✅ Extracted and decoded iframe content');
+          console.log('📝 Content preview:', extractedContent.substring(0, 200) + '...');
           finalHtml = extractedContent;
+        } else {
+          console.log('⚠️ iframe detected but srcdoc extraction failed');
+          const htmlMatch = rawText.match(/<[^>]+>/);
+          if (htmlMatch) {
+            finalHtml = rawText;
+          } else {
+            finalHtml = `<p>${rawText}</p>`;
+          }
         }
       }
+      
+      // 2. Try JSON (handles schema, json mode)
       else if (rawText.trim().startsWith('{') || rawText.trim().startsWith('[')) {
         console.log('🎯 AUTO-DETECTED: JSON format');
         try {
           const jsonData = JSON.parse(rawText);
+          console.log('📦 JSON structure:', Object.keys(jsonData));
           
           if (Array.isArray(jsonData)) {
+            console.log('📋 JSON Array detected');
             if (jsonData.length > 0) {
               const firstItem = jsonData[0];
               finalHtml = firstItem.output || firstItem.response || firstItem.content || firstItem.message || '';
             }
           } else if (typeof jsonData === 'object') {
+            console.log('📋 JSON Object detected');
             finalHtml = jsonData.output || 
                        jsonData.response || 
                        jsonData.content || 
@@ -352,114 +288,60 @@ const MedicalResearchGini = () => {
                        jsonData.data ||
                        JSON.stringify(jsonData, null, 2);
           }
+          
+          console.log('✅ Extracted from JSON, length:', finalHtml.length);
         } catch (jsonError) {
           console.log('⚠️ JSON parsing failed:', jsonError.message);
           finalHtml = `<p>${rawText}</p>`;
         }
       }
+      
+      // 3. Check for direct HTML (table mode)
       else if (rawText.includes('<h2>') || rawText.includes('<h3>') || rawText.includes('<p>')) {
-        console.log('🎯 AUTO-DETECTED: Direct HTML format');
+        console.log('🎯 AUTO-DETECTED: Direct HTML format (table mode)');
         finalHtml = rawText;
       }
+      
+      // 4. Plain text fallback
       else {
         console.log('🎯 AUTO-DETECTED: Plain text format');
         const formattedText = rawText.replace(/\n/g, '<br>');
         finalHtml = `<p>${formattedText}</p>`;
       }
 
-      // CHECK FOR IMAGE REQUIREMENTS
-      const imageDetection = detectImageRequirement(originalMessage);
-      console.log('🎨 Image detection result:', imageDetection);
-
-      if (imageDetection.needsImage && imageDetection.confidence !== 'low') {
-        console.log('🎨 Generating molecular image...');
-        
-        // Add image loading indicator to response
-        const imageLoadingHtml = `
-          <div class="image-generation-status" style="background: #f0f9ff; border: 2px solid #0ea5e9; border-radius: 8px; padding: 12px; margin: 16px 0;">
-            <div style="display: flex; align-items: center; gap: 8px;">
-              <div class="loading-spinner" style="width: 16px; height: 16px; border: 2px solid #0ea5e9; border-top: 2px solid transparent; border-radius: 50%; animation: spin 1s linear infinite;"></div>
-              <span style="color: #0369a1; font-weight: 600;">Generating ${imageDetection.imageType.toUpperCase()} molecular structure for ${imageDetection.compound}...</span>
-            </div>
-          </div>
-        `;
-        
-        finalHtml += imageLoadingHtml;
-        
-        // Try to generate or fetch the image
-        let imageUrl = await generateMolecularImage(imageDetection.compound, imageDetection.imageType);
-        
-        // Fallback to public APIs if custom generation fails
-        if (!imageUrl) {
-          console.log('🔄 Trying fallback image sources...');
-          imageUrl = getFallbackImageUrl(imageDetection.compound, imageDetection.imageType);
-        }
-        
-        if (imageUrl) {
-          const imageHtml = `
-            <div class="molecular-image-container" style="margin: 20px 0; text-align: center; background: white; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); padding: 16px;">
-              <h4 style="color: #1e40af; margin: 0 0 12px 0; font-size: 16px; font-weight: 600;">
-                ${imageDetection.imageType.toUpperCase()} Structure: ${imageDetection.compound}
-              </h4>
-              <div style="position: relative; display: inline-block;">
-                <img 
-                  src="${imageUrl}" 
-                  alt="${imageDetection.compound} molecular structure"
-                  style="max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);"
-                  onload="this.parentElement.parentElement.querySelector('.image-generation-status')?.remove()"
-                  onerror="this.parentElement.innerHTML='<p style=\\"color: #dc2626;\\">Image generation failed. Please try again or check the compound name.</p>'"
-                />
-                <div style="position: absolute; top: 8px; right: 8px; background: rgba(30, 64, 175, 0.9); color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 600;">
-                  ${imageDetection.imageType.toUpperCase()}
-                </div>
-              </div>
-              <p style="margin: 8px 0 0 0; font-size: 12px; color: #6b7280;">
-                Interactive molecular visualization • Click to enlarge
-              </p>
-            </div>
-          `;
-          
-          // Replace loading indicator with actual image
-          finalHtml = finalHtml.replace(imageLoadingHtml, imageHtml);
-        } else {
-          // Replace loading with error message
-          const errorHtml = `
-            <div style="background: #fef2f2; border: 2px solid #fecaca; border-radius: 8px; padding: 12px; margin: 16px 0;">
-              <p style="color: #dc2626; margin: 0; font-weight: 600;">
-                ⚠️ Unable to generate molecular structure image for ${imageDetection.compound}
-              </p>
-              <p style="color: #7f1d1d; margin: 4px 0 0 0; font-size: 14px;">
-                This may be due to an unrecognized compound name or service unavailability.
-              </p>
-            </div>
-          `;
-          finalHtml = finalHtml.replace(imageLoadingHtml, errorHtml);
-        }
-      }
-
-      // Process escaped characters
+      // PROCESS ESCAPED CHARACTERS (common in all formats)
       if (typeof finalHtml === 'string') {
         if (finalHtml.includes('\\n')) {
+          console.log('🔄 Converting escaped newlines');
           finalHtml = finalHtml.replace(/\\n/g, '<br>');
         }
         
         if (finalHtml.includes('\\u')) {
+          console.log('🔄 Converting unicode escapes');
           finalHtml = finalHtml.replace(/\\u([0-9a-fA-F]{4})/g, (match, code) => {
             return String.fromCharCode(parseInt(code, 16));
           });
         }
       }
 
-      // Validate final content
+      // VALIDATE FINAL CONTENT
       if (!finalHtml || finalHtml.trim().length < 3) {
         console.warn('⚠️ Final content is too short');
         return `<div style="padding: 12px; background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 6px;">
           <p><strong>Content Processing Issue</strong></p>
           <p>Processed response but content appears empty or too short.</p>
+          <details>
+            <summary>Debug - Raw Response</summary>
+            <pre style="font-size: 10px; background: #f8f9fa; padding: 8px; margin-top: 8px; max-height: 200px; overflow-y: auto;">${rawText.substring(0, 500)}</pre>
+          </details>
+          <details>
+            <summary>Debug - Processed Content</summary>
+            <pre style="font-size: 10px; background: #f8f9fa; padding: 8px; margin-top: 8px; max-height: 200px; overflow-y: auto;">${finalHtml}</pre>
+          </details>
         </div>`;
       }
 
-      // Enhanced final cleanup
+      // Enhanced final cleanup with special character processing
       const preliminaryClean = finalHtml
         .replace(/^<!DOCTYPE[^>]*>/i, '')
         .replace(/^<html[^>]*>/i, '')
@@ -469,19 +351,25 @@ const MedicalResearchGini = () => {
         .replace(/<\/body>$/i, '')
         .trim();
 
+      // Apply special character cleaning
       const cleanedHtml = cleanSpecialCharacters(preliminaryClean);
 
-      console.log('✅ FINAL PROCESSED HTML WITH IMAGES:');
+      console.log('✅ FINAL PROCESSED HTML:');
       console.log('   Length:', cleanedHtml.length);
-      console.log('🔍 ===== END ENHANCED PROCESSOR =====');
+      console.log('   Preview:', cleanedHtml.substring(0, 300) + '...');
+      console.log('🔍 ===== END UNIVERSAL PROCESSOR =====');
       
       return cleanedHtml;
 
     } catch (error) {
-      console.error('❌ CRITICAL ERROR in enhanced processor:', error);
+      console.error('❌ CRITICAL ERROR in universal processor:', error);
       return `<div style="color: #dc2626; background: #fef2f2; padding: 12px; border-radius: 6px; border: 1px solid #fecaca;">
-        <strong>Enhanced Response Processing Error</strong><br/>
+        <strong>Universal Response Processing Error</strong><br/>
         ${error.message}
+        <details>
+          <summary>Debug Info</summary>
+          <p>Error occurred while processing response</p>
+        </details>
       </div>`;
     }
   };
@@ -501,7 +389,7 @@ const MedicalResearchGini = () => {
     return true;
   };
 
-  // Enhanced send message function with image detection
+  // Main send message function with throttling
   const sendMessage = async () => {
     if (!inputMessage.trim() || isLoading) return;
 
@@ -530,17 +418,12 @@ const MedicalResearchGini = () => {
     const userId = `user_${Date.now()}`;
     const messageId = generateMessageId('user');
 
-    // Detect image requirements
-    const imageRequirement = detectImageRequirement(inputMessage);
-    console.log('🎨 Image requirement detected:', imageRequirement);
-
     const userMessage = {
       id: Date.now(),
       type: 'user',
       content: inputMessage,
       timestamp: new Date(),
-      messageId: messageId,
-      imageRequirement: imageRequirement
+      messageId: messageId
     };
 
     setMessages(prev => [...prev, userMessage]);
@@ -555,11 +438,10 @@ const MedicalResearchGini = () => {
         sessionId: sessionId,
         userId: userId,
         messageId: messageId,
-        timestamp: new Date().toISOString(),
-        imageRequirement: imageRequirement // Pass image requirements to N8N
+        timestamp: new Date().toISOString()
       };
 
-      console.log('📤 Sending enhanced request to:', N8N_WEBHOOK_URL);
+      console.log('📤 Sending request to:', N8N_WEBHOOK_URL);
       console.log('📤 Request data:', messageData);
 
       const response = await fetch(N8N_WEBHOOK_URL, {
@@ -591,7 +473,7 @@ const MedicalResearchGini = () => {
         }
       }
 
-      const aiResponse = await processResponse(response, currentMessage);
+      const aiResponse = await processResponse(response);
 
       const botMessage = {
         id: Date.now() + 1,
@@ -599,21 +481,19 @@ const MedicalResearchGini = () => {
         content: aiResponse,
         timestamp: new Date(),
         isHTML: true,
-        messageId: generateMessageId('gini'),
-        hasImages: aiResponse.includes('<img') || aiResponse.includes('molecular-image-container')
+        messageId: generateMessageId('gini')
       };
 
-      console.log('📤 Creating enhanced bot message:', {
+      console.log('📤 Creating bot message:', {
         contentLength: aiResponse.length,
         isHTML: true,
-        hasImages: botMessage.hasImages,
         contentPreview: aiResponse.substring(0, 100) + '...'
       });
 
       setMessages(prev => [...prev, botMessage]);
 
     } catch (error) {
-      console.error('❌ Error sending enhanced message:', error);
+      console.error('❌ Error sending message:', error);
       
       let errorMessage = 'Sorry, I\'m having trouble processing your request. ';
       
@@ -643,7 +523,29 @@ const MedicalResearchGini = () => {
     }
   };
 
-  // Feedback Functions (keeping existing)
+  // Xata connection test
+  const testXataConnection = async () => {
+    try {
+      const response = await fetch(`${XATA_CONFIG.baseURL}/tables/messages/query`, {
+        method: 'POST',
+        headers: XATA_CONFIG.headers,
+        body: JSON.stringify({ page: { size: 1 } })
+      });
+      
+      if (response.ok) {
+        console.log('✅ Xata connection successful!');
+        return true;
+      } else {
+        console.error('❌ Xata connection failed:', response.status);
+        return false;
+      }
+    } catch (error) {
+      console.error('❌ Xata connection error:', error);
+      return false;
+    }
+  };
+
+  // Feedback Functions
   const handleQuickFeedback = async (messageId, rating) => {
     try {
       const feedback = {
@@ -655,6 +557,9 @@ const MedicalResearchGini = () => {
         userId: `user_${Date.now()}`
       };
 
+      console.log('📤 Sending quick feedback to:', FEEDBACK_WEBHOOK_URL);
+      console.log('📤 Feedback data:', feedback);
+
       const response = await fetch(FEEDBACK_WEBHOOK_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -662,11 +567,15 @@ const MedicalResearchGini = () => {
       });
 
       if (response.ok) {
+        console.log('✅ Quick feedback sent successfully');
         setUserFeedback(prev => ({
           ...prev,
           [messageId]: { ...prev[messageId], thumbs: rating }
         }));
+      } else {
+        console.error('❌ Failed to send quick feedback:', response.status);
       }
+
     } catch (error) {
       console.error('❌ Error sending quick feedback:', error);
     }
@@ -691,6 +600,9 @@ const MedicalResearchGini = () => {
         userId: `user_${Date.now()}`
       };
 
+      console.log('📤 Sending detailed feedback to:', FEEDBACK_WEBHOOK_URL);
+      console.log('📤 Detailed feedback data:', feedback);
+
       const response = await fetch(FEEDBACK_WEBHOOK_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -698,6 +610,7 @@ const MedicalResearchGini = () => {
       });
 
       if (response.ok) {
+        console.log('✅ Detailed feedback sent successfully');
         setUserFeedback(prev => ({
           ...prev,
           [feedbackModal.messageId]: { 
@@ -708,13 +621,16 @@ const MedicalResearchGini = () => {
         }));
 
         setFeedbackModal({ open: false, messageId: null, messageContent: '' });
+      } else {
+        console.error('❌ Failed to send detailed feedback:', response.status);
       }
+
     } catch (error) {
       console.error('❌ Error sending detailed feedback:', error);
     }
   };
 
-  // Download Functions (keeping existing)
+  // Download Functions
   const downloadChatAsText = () => {
     const chatContent = messages
       .filter(msg => msg.type !== 'bot' || !msg.isError)
@@ -727,7 +643,7 @@ const MedicalResearchGini = () => {
       .join('\n\n');
 
     const content = `PharmaTech Innovations - DrugDiscovery AI
-Drug Discovery Research Session Export (With Molecular Visualizations)
+Drug Discovery Research Session Export
 Generated on: ${new Date().toLocaleString()}
 Total Messages: ${messages.length}
 
@@ -742,7 +658,7 @@ End of Drug Discovery Session
     const element = document.createElement('a');
     const file = new Blob([content], { type: 'text/plain' });
     element.href = URL.createObjectURL(file);
-    element.download = `pharmatech-drugdiscovery-enhanced-${Date.now()}.txt`;
+    element.download = `pharmatech-drugdiscovery-${Date.now()}.txt`;
     document.body.appendChild(element);
     element.click();
     document.body.removeChild(element);
@@ -760,7 +676,7 @@ End of Drug Discovery Session
       .join('\n\n');
 
     const content = `PharmaTech Innovations - DrugDiscovery AI
-Drug Discovery Research Session Export (Enhanced with Molecular Visualizations)
+Drug Discovery Research Session Export
 Generated on: ${new Date().toLocaleString()}
 Total Messages: ${messages.length}
 
@@ -775,22 +691,21 @@ End of Drug Discovery Session
     const element = document.createElement('a');
     const file = new Blob([content], { type: 'application/msword' });
     element.href = URL.createObjectURL(file);
-    element.download = `pharmatech-drugdiscovery-enhanced-${Date.now()}.doc`;
+    element.download = `pharmatech-drugdiscovery-${Date.now()}.doc`;
     document.body.appendChild(element);
     element.click();
     document.body.removeChild(element);
   };
 
   const downloadChatAsCSV = () => {
-    const csvHeader = '"Timestamp","Sender","Message","Has Images"\n';
+    const csvHeader = '"Timestamp","Sender","Message"\n';
     const csvContent = messages
       .filter(msg => msg.type !== 'bot' || !msg.isError)
       .map(msg => {
         const timestamp = new Date(msg.timestamp).toLocaleString();
         const sender = msg.type === 'user' ? 'Researcher' : 'Dr. Gini (Drug Discovery Specialist)';
         const content = htmlToPlainText(msg.content).replace(/"/g, '""');
-        const hasImages = msg.hasImages ? 'Yes' : 'No';
-        return `"${timestamp}","${sender}","${content}","${hasImages}"`;
+        return `"${timestamp}","${sender}","${content}"`;
       })
       .join('\n');
 
@@ -799,7 +714,7 @@ End of Drug Discovery Session
     const element = document.createElement('a');
     const file = new Blob([fullCsvContent], { type: 'text/csv' });
     element.href = URL.createObjectURL(file);
-    element.download = `pharmatech-drugdiscovery-enhanced-${Date.now()}.csv`;
+    element.download = `pharmatech-drugdiscovery-${Date.now()}.csv`;
     document.body.appendChild(element);
     element.click();
     document.body.removeChild(element);
@@ -929,39 +844,16 @@ End of Drug Discovery Session
         font-size: 0.9em;
         color: #e11d48;
       }
-      
-      .molecular-image-container img {
-        cursor: pointer;
-        transition: transform 0.2s ease;
-      }
-      
-      .molecular-image-container img:hover {
-        transform: scale(1.05);
-      }
-      
-      .loading-spinner {
-        animation: spin 1s linear infinite;
-      }
-      
-      @keyframes spin {
-        from { transform: rotate(0deg); }
-        to { transform: rotate(360deg); }
-      }
-      
-      .image-generation-status {
-        animation: pulse 2s ease-in-out infinite;
-      }
-      
-      @keyframes pulse {
-        0%, 100% { opacity: 1; }
-        50% { opacity: 0.7; }
-      }
     `;
     document.head.appendChild(style);
     
     return () => {
       document.head.removeChild(style);
     };
+  }, []);
+
+  useEffect(() => {
+    testXataConnection();
   }, []);
 
   // Cooldown timer effect
@@ -978,89 +870,71 @@ End of Drug Discovery Session
 
   return (
     <div className="flex flex-col h-screen bg-gray-50">
-      {/* Enhanced Header with molecular visualization indicator */}
+      {/* Header with full SVG logo */}
       <div className="bg-gradient-to-r from-blue-900 to-blue-800 shadow-lg border-b px-6 py-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <svg width="64" height="64" viewBox="0 0 120 120" className="w-16 h-16">
-              <defs>
-                <linearGradient id="logoGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stopColor="#7c3aed" />
-                  <stop offset="50%" stopColor="#5b21b6" />
-                  <stop offset="100%" stopColor="#4c1d95" />
-                </linearGradient>
-                <linearGradient id="moleculeGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stopColor="#06b6d4" />
-                  <stop offset="100%" stopColor="#0891b2" />
-                </linearGradient>
-                <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
-                  <feDropShadow dx="2" dy="2" stdDeviation="3" floodColor="#5b21b6" floodOpacity="0.3"/>
-                </filter>
-              </defs>
-              
-              <circle cx="60" cy="60" r="56" fill="url(#logoGradient)" filter="url(#shadow)" />
-              <circle cx="60" cy="60" r="50" fill="white" />
-              
-              <g stroke="#5b21b6" strokeWidth="2" fill="none">
-                <polygon points="60,30 75,40 75,60 60,70 45,60 45,40" stroke="#5b21b6" strokeWidth="2" fill="none" />
-                <line x1="75" y1="40" x2="90" y2="35" strokeLinecap="round" />
-                <line x1="75" y1="60" x2="90" y2="65" strokeLinecap="round" />
-                <line x1="45" y1="40" x2="30" y2="35" strokeLinecap="round" />
-                <line x1="45" y1="60" x2="30" y2="65" strokeLinecap="round" />
-              </g>
-              
-              <circle cx="60" cy="30" r="4" fill="#ef4444" stroke="#dc2626" strokeWidth="1" />
-              <circle cx="75" cy="40" r="3" fill="#3b82f6" stroke="#2563eb" strokeWidth="1" />
-              <circle cx="75" cy="60" r="3" fill="#10b981" stroke="#059669" strokeWidth="1" />
-              <circle cx="60" cy="70" r="4" fill="#f59e0b" stroke="#d97706" strokeWidth="1" />
-              <circle cx="45" cy="60" r="3" fill="#8b5cf6" stroke="#7c3aed" strokeWidth="1" />
-              <circle cx="45" cy="40" r="3" fill="#ec4899" stroke="#db2777" strokeWidth="1" />
-              
-              <circle cx="90" cy="35" r="2.5" fill="#06b6d4" stroke="#0891b2" strokeWidth="1" />
-              <circle cx="90" cy="65" r="2.5" fill="#84cc16" stroke="#65a30d" strokeWidth="1" />
-              <circle cx="30" cy="35" r="2.5" fill="#f97316" stroke="#ea580c" strokeWidth="1" />
-              <circle cx="30" cy="65" r="2.5" fill="#6366f1" stroke="#4f46e5" strokeWidth="1" />
-              
-              <g stroke="url(#moleculeGradient)" strokeWidth="1.5" fill="none" opacity="0.6">
-                <circle cx="60" cy="60" r="25" strokeDasharray="3,3">
-                  <animateTransform
-                    attributeName="transform"
-                    attributeType="XML"
-                    type="rotate"
-                    from="0 60 60"
-                    to="360 60 60"
-                    dur="8s"
-                    repeatCount="indefinite"/>
-                </circle>
-              </g>
-              
-              <text x="60" y="95" fontFamily="Arial, sans-serif" fontSize="14" fontWeight="bold" textAnchor="middle" fill="#5b21b6">PT</text>
-              <text x="60" y="108" fontFamily="Arial, sans-serif" fontSize="6" fontWeight="bold" textAnchor="middle" fill="#5b21b6" opacity="0.8">INNOVATIONS</text>
-              
-              <circle cx="60" cy="60" r="50" fill="none" stroke="rgba(123, 58, 237, 0.3)" strokeWidth="2" />
-            </svg>
-            <div>
-              <h1 className="text-xl font-bold text-white">DrugDiscovery AI Enhanced</h1>
-              <p className="text-sm text-blue-100">PharmaTech Innovations • Accelerating Early-Stage Drug Discovery</p>
-              <p className="text-xs text-blue-200 mt-1">"From Molecules to Medicine: AI-Powered Discovery Pipeline"</p>
-              <div className="flex items-center space-x-2 mt-1">
-                <Beaker className="w-3 h-3 text-blue-300" />
-                <span className="text-xs text-blue-300">2D/3D Molecular Visualization</span>
-                <Atom className="w-3 h-3 text-blue-300" />
-                <span className="text-xs text-blue-300">Structure Generation</span>
-              </div>
-            </div>
+        <div className="flex items-center space-x-4">
+          <svg width="64" height="64" viewBox="0 0 120 120" className="w-16 h-16">
+            <defs>
+              <linearGradient id="logoGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#7c3aed" />
+                <stop offset="50%" stopColor="#5b21b6" />
+                <stop offset="100%" stopColor="#4c1d95" />
+              </linearGradient>
+              <linearGradient id="moleculeGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#06b6d4" />
+                <stop offset="100%" stopColor="#0891b2" />
+              </linearGradient>
+              <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
+                <feDropShadow dx="2" dy="2" stdDeviation="3" floodColor="#5b21b6" floodOpacity="0.3"/>
+              </filter>
+            </defs>
+            
+            <circle cx="60" cy="60" r="56" fill="url(#logoGradient)" filter="url(#shadow)" />
+            <circle cx="60" cy="60" r="50" fill="white" />
+            
+            <g stroke="#5b21b6" strokeWidth="2" fill="none">
+              <polygon points="60,30 75,40 75,60 60,70 45,60 45,40" stroke="#5b21b6" strokeWidth="2" fill="none" />
+              <line x1="75" y1="40" x2="90" y2="35" strokeLinecap="round" />
+              <line x1="75" y1="60" x2="90" y2="65" strokeLinecap="round" />
+              <line x1="45" y1="40" x2="30" y2="35" strokeLinecap="round" />
+              <line x1="45" y1="60" x2="30" y2="65" strokeLinecap="round" />
+            </g>
+            
+            <circle cx="60" cy="30" r="4" fill="#ef4444" stroke="#dc2626" strokeWidth="1" />
+            <circle cx="75" cy="40" r="3" fill="#3b82f6" stroke="#2563eb" strokeWidth="1" />
+            <circle cx="75" cy="60" r="3" fill="#10b981" stroke="#059669" strokeWidth="1" />
+            <circle cx="60" cy="70" r="4" fill="#f59e0b" stroke="#d97706" strokeWidth="1" />
+            <circle cx="45" cy="60" r="3" fill="#8b5cf6" stroke="#7c3aed" strokeWidth="1" />
+            <circle cx="45" cy="40" r="3" fill="#ec4899" stroke="#db2777" strokeWidth="1" />
+            
+            <circle cx="90" cy="35" r="2.5" fill="#06b6d4" stroke="#0891b2" strokeWidth="1" />
+            <circle cx="90" cy="65" r="2.5" fill="#84cc16" stroke="#65a30d" strokeWidth="1" />
+            <circle cx="30" cy="35" r="2.5" fill="#f97316" stroke="#ea580c" strokeWidth="1" />
+            <circle cx="30" cy="65" r="2.5" fill="#6366f1" stroke="#4f46e5" strokeWidth="1" />
+            
+            <g stroke="url(#moleculeGradient)" strokeWidth="1.5" fill="none" opacity="0.6">
+              <circle cx="60" cy="60" r="25" strokeDasharray="3,3">
+                <animateTransform
+                  attributeName="transform"
+                  attributeType="XML"
+                  type="rotate"
+                  from="0 60 60"
+                  to="360 60 60"
+                  dur="8s"
+                  repeatCount="indefinite"/>
+              </circle>
+            </g>
+            
+            <text x="60" y="95" fontFamily="Arial, sans-serif" fontSize="14" fontWeight="bold" textAnchor="middle" fill="#5b21b6">PT</text>
+            <text x="60" y="108" fontFamily="Arial, sans-serif" fontSize="6" fontWeight="bold" textAnchor="middle" fill="#5b21b6" opacity="0.8">INNOVATIONS</text>
+            
+            <circle cx="60" cy="60" r="50" fill="none" stroke="rgba(123, 58, 237, 0.3)" strokeWidth="2" />
+          </svg>
+          <div>
+            <h1 className="text-xl font-bold text-white">DrugDiscovery AI</h1>
+            <p className="text-sm text-blue-100">PharmaTech Innovations • Accelerating Early-Stage Drug Discovery</p>
+            <p className="text-xs text-blue-200 mt-1">"From Molecules to Medicine: AI-Powered Discovery Pipeline"</p>
           </div>
-          
-          {/* Image generation status indicator */}
-          {(isGeneratingImage || isLoading) && (
-            <div className="flex items-center space-x-2 text-blue-200">
-              <Loader2 className="w-4 h-4 animate-spin" />
-              <span className="text-sm">
-                {isGeneratingImage ? 'Generating Structure...' : 'Processing...'}
-              </span>
-            </div>
-          )}
         </div>
       </div>
 
@@ -1071,9 +945,9 @@ End of Drug Discovery Session
             key={message.id}
             className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}
           >
-            <div className={`flex space-x-3 max-w-4xl ${message.type === 'user' ? 'flex-row-reverse space-x-reverse' : ''}`}>
-              {/* Enhanced Avatar with image indicator */}
-              <div className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center relative ${
+            <div className={`flex space-x-3 max-w-3xl ${message.type === 'user' ? 'flex-row-reverse space-x-reverse' : ''}`}>
+              {/* Avatar */}
+              <div className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center ${
                 message.type === 'user' 
                   ? 'bg-gradient-to-br from-blue-600 to-blue-700 shadow-md' 
                   : message.isError 
@@ -1081,30 +955,16 @@ End of Drug Discovery Session
                     : 'bg-gradient-to-br from-green-600 to-emerald-700 shadow-md border-2 border-white'
               }`}>
                 {message.type === 'user' ? (
-                  <>
-                    <User className="w-5 h-5 text-white" />
-                    {message.imageRequirement?.needsImage && (
-                      <div className="absolute -top-1 -right-1 w-4 h-4 bg-blue-500 rounded-full flex items-center justify-center">
-                        <Image className="w-2 h-2 text-white" />
-                      </div>
-                    )}
-                  </>
+                  <User className="w-5 h-5 text-white" />
                 ) : (
-                  <>
-                    <div className="w-6 h-6 bg-white rounded-full flex items-center justify-center">
-                      <svg width="16" height="16" viewBox="0 0 24 24" className="w-4 h-4">
-                        <path d="M19 8c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm0-3c-.55 0-1 .45-1 1s.45 1 1 1 1-.45 1-1-.45-1-1-1z" fill="#1e40af"/>
-                        <path d="M16 4.5c0-.28-.22-.5-.5-.5s-.5.22-.5.5V11c0 2.76-2.24 5-5 5s-5-2.24-5-5V4.5c0-.28-.22-.5-.5-.5S4 4.22 4 4.5V11c0 3.31 2.69 6 6 6s6-2.69 6-6V4.5z" fill="#1e40af"/>
-                        <circle cx="7" cy="4" r="2" fill="#10b981"/>
-                        <circle cx="13" cy="4" r="2" fill="#10b981"/>
-                      </svg>
-                    </div>
-                    {message.hasImages && (
-                      <div className="absolute -top-1 -right-1 w-4 h-4 bg-purple-500 rounded-full flex items-center justify-center">
-                        <Beaker className="w-2 h-2 text-white" />
-                      </div>
-                    )}
-                  </>
+                  <div className="w-6 h-6 bg-white rounded-full flex items-center justify-center">
+                    <svg width="16" height="16" viewBox="0 0 24 24" className="w-4 h-4">
+                      <path d="M19 8c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm0-3c-.55 0-1 .45-1 1s.45 1 1 1 1-.45 1-1-.45-1-1-1z" fill="#1e40af"/>
+                      <path d="M16 4.5c0-.28-.22-.5-.5-.5s-.5.22-.5.5V11c0 2.76-2.24 5-5 5s-5-2.24-5-5V4.5c0-.28-.22-.5-.5-.5S4 4.22 4 4.5V11c0 3.31 2.69 6 6 6s6-2.69 6-6V4.5z" fill="#1e40af"/>
+                      <circle cx="7" cy="4" r="2" fill="#10b981"/>
+                      <circle cx="13" cy="4" r="2" fill="#10b981"/>
+                    </svg>
+                  </div>
                 )}
               </div>
 
@@ -1116,7 +976,7 @@ End of Drug Discovery Session
                     : message.isError
                       ? 'bg-red-50 text-red-800 border border-red-200'
                       : 'bg-white text-gray-800 border border-gray-200'
-                }`} style={{ maxHeight: 'none', overflow: 'visible', maxWidth: '100%' }}>
+                }`} style={{ maxHeight: 'none', overflow: 'visible' }}>
                   {renderMessageContent(message)}
                 </div>
 
@@ -1160,13 +1020,6 @@ End of Drug Discovery Session
                       <MessageSquare className="w-3 h-3" />
                       <span>Feedback</span>
                     </button>
-
-                    {message.hasImages && (
-                      <div className="flex items-center space-x-1 px-2 py-1 text-xs bg-purple-50 text-purple-600 rounded">
-                        <Beaker className="w-3 h-3" />
-                        <span>Contains Structures</span>
-                      </div>
-                    )}
                   </div>
                 )}
 
@@ -1178,7 +1031,7 @@ End of Drug Discovery Session
           </div>
         ))}
 
-        {/* Enhanced Loading indicator */}
+        {/* Loading indicator */}
         {isLoading && (
           <div className="flex justify-start">
             <div className="flex space-x-3 max-w-3xl">
@@ -1196,16 +1049,8 @@ End of Drug Discovery Session
                 <div className="px-4 py-3 rounded-lg bg-white border border-gray-200 shadow-sm">
                   <div className="flex items-center space-x-2">
                     <Loader2 className="w-4 h-4 animate-spin text-emerald-600" />
-                    <span className="text-gray-600">
-                      {isGeneratingImage ? 'Dr. Gini is generating molecular structures...' : 'Dr. Gini is analyzing your research query...'}
-                    </span>
+                    <span className="text-gray-600">Dr. Gini is analyzing your research query...</span>
                   </div>
-                  {isGeneratingImage && (
-                    <div className="mt-2 text-xs text-gray-500 flex items-center space-x-1">
-                      <Beaker className="w-3 h-3" />
-                      <span>Creating 2D/3D visualizations</span>
-                    </div>
-                  )}
                 </div>
               </div>
             </div>
@@ -1215,7 +1060,7 @@ End of Drug Discovery Session
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Enhanced Input Area */}
+      {/* Input Area */}
       <div className="bg-white border-t px-6 py-4">
         {/* Download Section */}
         {messages.length > 1 && (
@@ -1224,10 +1069,6 @@ End of Drug Discovery Session
               <div className="flex items-center space-x-2">
                 <Download className="w-4 h-4 text-gray-600" />
                 <span className="text-sm font-medium text-gray-700">Download Discovery Session</span>
-                <div className="flex items-center space-x-1 text-xs text-purple-600 bg-purple-50 px-2 py-1 rounded">
-                  <Beaker className="w-3 h-3" />
-                  <span>Enhanced with Molecular Structures</span>
-                </div>
               </div>
               <div className="flex space-x-2">
                 <button
@@ -1268,39 +1109,19 @@ End of Drug Discovery Session
           </div>
         )}
 
-        {/* Enhanced Message Input with structure examples */}
+        {/* Message Input */}
         <div className="flex space-x-4">
           <div className="flex-1 relative">
             <textarea
               value={inputMessage}
               onChange={(e) => setInputMessage(e.target.value)}
               onKeyPress={handleKeyPress}
-              placeholder="Ask me about drug targets, molecular structures, 2D/3D visualizations, compound optimization, ADMET properties, clinical trials, or any drug discovery questions... Try: 'Show me the structure of chromene' or 'Generate 3D visualization of caffeine'"
+              placeholder="Ask me about drug targets, compound optimization, ADMET properties, clinical trials, or any drug discovery questions..."
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
               rows="1"
               style={{ minHeight: '50px', maxHeight: '120px' }}
               disabled={isLoading || cooldownTimeLeft > 0}
             />
-            
-            {/* Quick structure buttons */}
-            <div className="absolute bottom-2 right-2 flex space-x-1">
-              <button
-                onClick={() => setInputMessage('Show me the 2D structure of chromene')}
-                className="px-2 py-1 text-xs bg-blue-100 text-blue-600 rounded hover:bg-blue-200 transition-colors"
-                disabled={isLoading}
-                title="Quick: 2D Structure"
-              >
-                2D
-              </button>
-              <button
-                onClick={() => setInputMessage('Generate 3D visualization of benzene')}
-                className="px-2 py-1 text-xs bg-purple-100 text-purple-600 rounded hover:bg-purple-200 transition-colors"
-                disabled={isLoading}
-                title="Quick: 3D Structure"
-              >
-                3D
-              </button>
-            </div>
           </div>
           <button
             onClick={sendMessage}
@@ -1316,14 +1137,12 @@ End of Drug Discovery Session
           </button>
         </div>
         
-        {/* Enhanced Connection Status */}
+        {/* Connection Status */}
         <div className="mt-2 text-xs text-gray-500 text-center">
           <span>🧬 Connected to PharmaTech Discovery Systems</span>
-          <span className="mx-2">•</span>
-          <span>🎨 2D/3D Molecular Visualization Enabled</span>
           <br />
           <span className="text-xs text-gray-400">
-            Session: {getSessionId().split('_')[1]} | MongoDB Memory + Xata Feedback + Structure Generation
+            Session: {getSessionId().split('_')[1]} | MongoDB Memory + Xata Feedback
           </span>
         </div>
       </div>
@@ -1341,13 +1160,12 @@ End of Drug Discovery Session
   );
 };
 
-// Enhanced Detailed Feedback Modal Component (keeping existing)
+// Detailed Feedback Modal Component
 const DetailedFeedbackModal = ({ isOpen, messageContent, onClose, onSubmit }) => {
   const [feedback, setFeedback] = useState({
     rating: 0,
     accuracyRating: 0,
     helpfulnessRating: 0,
-    visualQuality: 0, // New rating for molecular structures
     comment: '',
     improvementSuggestions: '',
     userExpertise: 'intermediate'
@@ -1363,7 +1181,6 @@ const DetailedFeedbackModal = ({ isOpen, messageContent, onClose, onSubmit }) =>
       rating: 0,
       accuracyRating: 0, 
       helpfulnessRating: 0,
-      visualQuality: 0,
       comment: '',
       improvementSuggestions: '',
       userExpertise: 'intermediate'
@@ -1371,8 +1188,6 @@ const DetailedFeedbackModal = ({ isOpen, messageContent, onClose, onSubmit }) =>
   };
 
   if (!isOpen) return null;
-
-  const hasImages = messageContent.includes('<img') || messageContent.includes('molecular-image-container');
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -1398,12 +1213,6 @@ const DetailedFeedbackModal = ({ isOpen, messageContent, onClose, onSubmit }) =>
                   : messageContent 
               }}
             />
-            {hasImages && (
-              <div className="mt-2 flex items-center space-x-1 text-xs text-purple-600">
-                <Beaker className="w-3 h-3" />
-                <span>This response includes molecular structures</span>
-              </div>
-            )}
           </div>
 
           <div className="space-y-6">
@@ -1467,28 +1276,6 @@ const DetailedFeedbackModal = ({ isOpen, messageContent, onClose, onSubmit }) =>
               </div>
             </div>
 
-            {hasImages && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Molecular Structure Quality
-                </label>
-                <div className="flex items-center space-x-1">
-                  {[1, 2, 3, 4, 5].map((star) => (
-                    <button
-                      key={star}
-                      type="button"
-                      onClick={() => handleStarClick('visualQuality', star)}
-                      className={`p-1 ${
-                        star <= feedback.visualQuality ? 'text-purple-400' : 'text-gray-300'
-                      }`}
-                    >
-                      <Star className="w-5 h-5 fill-current" />
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Your Research Background
@@ -1512,7 +1299,7 @@ const DetailedFeedbackModal = ({ isOpen, messageContent, onClose, onSubmit }) =>
               <textarea
                 value={feedback.comment}
                 onChange={(e) => setFeedback(prev => ({ ...prev, comment: e.target.value }))}
-                placeholder="What did you think about this response? Was it helpful for your research? How were the molecular structures?"
+                placeholder="What did you think about this response? Was it helpful for your research?"
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 rows="3"
               />
@@ -1525,7 +1312,7 @@ const DetailedFeedbackModal = ({ isOpen, messageContent, onClose, onSubmit }) =>
               <textarea
                 value={feedback.improvementSuggestions}
                 onChange={(e) => setFeedback(prev => ({ ...prev, improvementSuggestions: e.target.value }))}
-                placeholder="How could Dr. Gini improve this type of response? What information was missing? How could the molecular visualizations be better?"
+                placeholder="How could Dr. Gini improve this type of response? What information was missing?"
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 rows="3"
               />
