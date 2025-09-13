@@ -17,7 +17,7 @@ const MedicalResearchGini = () => {
   const [userFeedback, setUserFeedback] = useState({});
   const [lastRequestTime, setLastRequestTime] = useState(0);
   const [cooldownTimeLeft, setCooldownTimeLeft] = useState(0);
-  const [imageViewMode, setImageViewMode] = useState('inline'); // 'inline', 'modal', 'hidden'
+  const [imageViewMode, setImageViewMode] = useState('inline');
   const messagesEndRef = useRef(null);
 
   // Configuration
@@ -30,10 +30,8 @@ const MedicalResearchGini = () => {
     }
   };
 
-  // Enhanced webhook URLs - FIXED: Removed problematic image generation webhook
+  // Enhanced webhook URLs with proper error handling
   const N8N_WEBHOOK_URL = process.env.REACT_APP_N8N_WEBHOOK_URL || 'https://prshntkumrai.app.n8n.cloud/webhook/Chatbot';
-  // DISABLED: This webhook causes CORS errors and doesn't exist
-  // const IMAGE_GENERATION_WEBHOOK = process.env.REACT_APP_N8N_IMAGE_WEBHOOK || 'https://prshntkumrai.app.n8n.cloud/webhook/generate-molecular-image';
   const FEEDBACK_WEBHOOK_URL = 'https://prshntkumrai.app.n8n.cloud/webhook/webhook/Chatbot/feedback';
   const REQUEST_COOLDOWN = 180000; // 3 minutes in milliseconds
 
@@ -44,14 +42,10 @@ const MedicalResearchGini = () => {
   // Enhanced image detection logic
   const detectImageRequirement = (message) => {
     const imageKeywords = [
-      // Structure requests
       'structure', 'molecular structure', 'chemical structure', 'show structure',
       'visualize', 'visualization', 'diagram', 'image', 'picture',
-      // 2D/3D requests  
       '2d', '3d', 'three dimensional', 'two dimensional', 'render',
-      // Molecular terms
       'molecule', 'compound', 'formula', 'bond', 'conformation',
-      // Specific requests
       'show me', 'display', 'draw', 'generate image', 'create visualization'
     ];
     
@@ -62,13 +56,8 @@ const MedicalResearchGini = () => {
     
     const lowerMessage = message.toLowerCase();
     
-    // Check for explicit image requests
     const hasImageKeyword = imageKeywords.some(keyword => lowerMessage.includes(keyword));
-    
-    // Check for molecular compound names
     const hasMolecularCompound = molecularCompounds.some(compound => lowerMessage.includes(compound));
-    
-    // Check for chemical formulas (e.g., C9H8O, H2O, etc.)
     const hasChemicalFormula = /[A-Z][a-z]?\d*([A-Z][a-z]?\d*)*/g.test(message);
     
     return {
@@ -83,23 +72,8 @@ const MedicalResearchGini = () => {
   const extractCompoundName = (message) => {
     const compounds = ['chromene', 'benzene', 'caffeine', 'aspirin', 'penicillin', 'dopamine', 'serotonin'];
     const found = compounds.find(compound => message.toLowerCase().includes(compound));
-    
-    // Also try to extract from chemical formulas
     const formulaMatch = message.match(/([A-Z][a-z]?\d*)+/g);
-    
     return found || (formulaMatch && formulaMatch[0]) || 'unknown';
-  };
-
-  // FIXED: Disable frontend image generation - let N8N handle everything
-  const generateMolecularImage = async (compound, imageType = '2d') => {
-    console.log(`Image generation delegated to N8N for: ${compound}`);
-    return null; // Let N8N handle all image generation
-  };
-
-  // FIXED: Disable fallback image URLs to prevent CORS issues
-  const getFallbackImageUrl = (compound, imageType) => {
-    console.log(`Fallback images disabled for CORS compliance: ${compound}`);
-    return null; // Prevent CORS errors
   };
 
   // Enhanced text cleaning function
@@ -144,6 +118,156 @@ const MedicalResearchGini = () => {
       .replace(/\^(\d+)/g, '<sup>$1</sup>')
       
       .trim();
+  };
+
+  // ENHANCED: Universal Response Processor with N8N array format handling
+  const processResponse = async (response, originalMessage = '') => {
+    console.log('Universal Response Processor');
+    console.log('Response status:', response.status);
+    
+    const contentType = response.headers.get('content-type') || '';
+    console.log('Content-Type:', contentType);
+
+    try {
+      const rawText = await response.text();
+      console.log('Raw response length:', rawText.length);
+      console.log('Raw response preview:', rawText.substring(0, 200));
+
+      let finalHtml = '';
+
+      // Process response (enhanced logic for N8N array format)
+      if (rawText.includes('<iframe') && rawText.includes('srcdoc=')) {
+        console.log('AUTO-DETECTED: Iframe wrapped HTML (n8n format)');
+        
+        let iframeMatch = rawText.match(/<iframe[^>]*srcdoc="([^"]*(?:\\"[^"]*)*)"[^>]*>/is);
+        
+        if (!iframeMatch) {
+          iframeMatch = rawText.match(/<iframe[^>]*srcdoc='([^']*(?:\\'[^']*)*)'[^>]*>/is);
+        }
+        
+        if (iframeMatch && iframeMatch[1]) {
+          let extractedContent = iframeMatch[1];
+          
+          extractedContent = extractedContent
+            .replace(/\\"/g, '"')
+            .replace(/\\'/g, "'")
+            .replace(/&quot;/g, '"')
+            .replace(/&#34;/g, '"')
+            .replace(/&apos;/g, "'")
+            .replace(/&#39;/g, "'")
+            .replace(/&lt;/g, '<')
+            .replace(/&#60;/g, '<')
+            .replace(/&gt;/g, '>')
+            .replace(/&#62;/g, '>')
+            .replace(/&nbsp;/g, ' ')
+            .replace(/&#160;/g, ' ')
+            .replace(/&amp;/g, '&')
+            .replace(/&#38;/g, '&');
+          
+          finalHtml = extractedContent;
+        }
+      }
+      else if (rawText.trim().startsWith('{') || rawText.trim().startsWith('[')) {
+        console.log('AUTO-DETECTED: JSON format');
+        try {
+          const jsonData = JSON.parse(rawText);
+          console.log('Parsed JSON structure:', typeof jsonData, Array.isArray(jsonData));
+          
+          if (Array.isArray(jsonData)) {
+            console.log('Processing JSON array with', jsonData.length, 'items');
+            if (jsonData.length > 0) {
+              const firstItem = jsonData[0];
+              console.log('First item keys:', Object.keys(firstItem));
+              
+              // FIXED: Handle N8N array format correctly
+              finalHtml = firstItem.output || 
+                         firstItem.response || 
+                         firstItem.content || 
+                         firstItem.message || 
+                         '';
+              
+              console.log('Extracted content length:', finalHtml.length);
+              console.log('Extracted content preview:', finalHtml.substring(0, 200));
+            }
+          } else if (typeof jsonData === 'object') {
+            console.log('Processing JSON object with keys:', Object.keys(jsonData));
+            finalHtml = jsonData.output || 
+                       jsonData.response || 
+                       jsonData.content || 
+                       jsonData.message || 
+                       jsonData.safeResponse ||
+                       jsonData.text ||
+                       jsonData.data ||
+                       JSON.stringify(jsonData, null, 2);
+          }
+        } catch (jsonError) {
+          console.log('JSON parsing failed:', jsonError.message);
+          console.log('Treating as plain text instead');
+          finalHtml = `<p>${rawText}</p>`;
+        }
+      }
+      else if (rawText.includes('<h2>') || rawText.includes('<h3>') || rawText.includes('<p>') || rawText.includes('<div')) {
+        console.log('AUTO-DETECTED: Direct HTML format');
+        finalHtml = rawText;
+      }
+      else {
+        console.log('AUTO-DETECTED: Plain text format');
+        const formattedText = rawText.replace(/\n/g, '<br>');
+        finalHtml = `<p>${formattedText}</p>`;
+      }
+
+      // Process escaped characters
+      if (typeof finalHtml === 'string') {
+        if (finalHtml.includes('\\n')) {
+          finalHtml = finalHtml.replace(/\\n/g, '<br>');
+        }
+        
+        if (finalHtml.includes('\\u')) {
+          finalHtml = finalHtml.replace(/\\u([0-9a-fA-F]{4})/g, (match, code) => {
+            return String.fromCharCode(parseInt(code, 16));
+          });
+        }
+      }
+
+      // Validate final content
+      if (!finalHtml || finalHtml.trim().length < 3) {
+        console.warn('Final content is too short');
+        console.log('Raw text for debugging:', rawText);
+        return `<div style="padding: 12px; background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 6px;">
+          <p><strong>Content Processing Issue</strong></p>
+          <p>Processed response but content appears empty or too short.</p>
+          <p><small>Raw response length: ${rawText.length}</small></p>
+        </div>`;
+      }
+
+      // Enhanced final cleanup
+      const preliminaryClean = finalHtml
+        .replace(/^<!DOCTYPE[^>]*>/i, '')
+        .replace(/^<html[^>]*>/i, '')
+        .replace(/<\/html>$/i, '')
+        .replace(/^<head>.*?<\/head>/is, '')
+        .replace(/^<body[^>]*>/i, '')
+        .replace(/<\/body>$/i, '')
+        .trim();
+
+      const cleanedHtml = cleanSpecialCharacters(preliminaryClean);
+
+      console.log('FINAL PROCESSED HTML:');
+      console.log('   Length:', cleanedHtml.length);
+      console.log('   Contains molecular structure:', cleanedHtml.includes('molecular-structure-display'));
+      console.log('   Contains image:', cleanedHtml.includes('<img'));
+      
+      return cleanedHtml;
+
+    } catch (error) {
+      console.error('CRITICAL ERROR in processor:', error);
+      console.error('Error stack:', error.stack);
+      return `<div style="color: #dc2626; background: #fef2f2; padding: 12px; border-radius: 6px; border: 1px solid #fecaca;">
+        <strong>Response Processing Error</strong><br/>
+        ${error.message}
+        <br/><small>Check browser console for details</small>
+      </div>`;
+    }
   };
   
   const getSessionId = () => {
@@ -240,138 +364,6 @@ const MedicalResearchGini = () => {
     }
   };
 
-  // FIXED: Simplified response processing - removed frontend image generation
-  const processResponse = async (response, originalMessage = '') => {
-    console.log('Universal Response Processor');
-    console.log('Response status:', response.status);
-    
-    const contentType = response.headers.get('content-type') || '';
-    console.log('Content-Type:', contentType);
-
-    try {
-      const rawText = await response.text();
-      console.log('Raw response length:', rawText.length);
-
-      let finalHtml = '';
-
-      // Process response (existing logic)
-      if (rawText.includes('<iframe') && rawText.includes('srcdoc=')) {
-        console.log('AUTO-DETECTED: Iframe wrapped HTML (n8n format)');
-        
-        let iframeMatch = rawText.match(/<iframe[^>]*srcdoc="([^"]*(?:\\"[^"]*)*)"[^>]*>/is);
-        
-        if (!iframeMatch) {
-          iframeMatch = rawText.match(/<iframe[^>]*srcdoc='([^']*(?:\\'[^']*)*)'[^>]*>/is);
-        }
-        
-        if (iframeMatch && iframeMatch[1]) {
-          let extractedContent = iframeMatch[1];
-          
-          extractedContent = extractedContent
-            .replace(/\\"/g, '"')
-            .replace(/\\'/g, "'")
-            .replace(/&quot;/g, '"')
-            .replace(/&#34;/g, '"')
-            .replace(/&apos;/g, "'")
-            .replace(/&#39;/g, "'")
-            .replace(/&lt;/g, '<')
-            .replace(/&#60;/g, '<')
-            .replace(/&gt;/g, '>')
-            .replace(/&#62;/g, '>')
-            .replace(/&nbsp;/g, ' ')
-            .replace(/&#160;/g, ' ')
-            .replace(/&amp;/g, '&')
-            .replace(/&#38;/g, '&');
-          
-          finalHtml = extractedContent;
-        }
-      }
-      else if (rawText.trim().startsWith('{') || rawText.trim().startsWith('[')) {
-        console.log('AUTO-DETECTED: JSON format');
-        try {
-          const jsonData = JSON.parse(rawText);
-          
-          if (Array.isArray(jsonData)) {
-            if (jsonData.length > 0) {
-              const firstItem = jsonData[0];
-              finalHtml = firstItem.output || firstItem.response || firstItem.content || firstItem.message || '';
-            }
-          } else if (typeof jsonData === 'object') {
-            finalHtml = jsonData.output || 
-                       jsonData.response || 
-                       jsonData.content || 
-                       jsonData.message || 
-                       jsonData.safeResponse ||
-                       jsonData.text ||
-                       jsonData.data ||
-                       JSON.stringify(jsonData, null, 2);
-          }
-        } catch (jsonError) {
-          console.log('JSON parsing failed:', jsonError.message);
-          finalHtml = `<p>${rawText}</p>`;
-        }
-      }
-      else if (rawText.includes('<h2>') || rawText.includes('<h3>') || rawText.includes('<p>')) {
-        console.log('AUTO-DETECTED: Direct HTML format');
-        finalHtml = rawText;
-      }
-      else {
-        console.log('AUTO-DETECTED: Plain text format');
-        const formattedText = rawText.replace(/\n/g, '<br>');
-        finalHtml = `<p>${formattedText}</p>`;
-      }
-
-      // REMOVED: Frontend image generation logic - N8N handles this
-
-      // Process escaped characters
-      if (typeof finalHtml === 'string') {
-        if (finalHtml.includes('\\n')) {
-          finalHtml = finalHtml.replace(/\\n/g, '<br>');
-        }
-        
-        if (finalHtml.includes('\\u')) {
-          finalHtml = finalHtml.replace(/\\u([0-9a-fA-F]{4})/g, (match, code) => {
-            return String.fromCharCode(parseInt(code, 16));
-          });
-        }
-      }
-
-      // Validate final content
-      if (!finalHtml || finalHtml.trim().length < 3) {
-        console.warn('Final content is too short');
-        return `<div style="padding: 12px; background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 6px;">
-          <p><strong>Content Processing Issue</strong></p>
-          <p>Processed response but content appears empty or too short.</p>
-        </div>`;
-      }
-
-      // Enhanced final cleanup
-      const preliminaryClean = finalHtml
-        .replace(/^<!DOCTYPE[^>]*>/i, '')
-        .replace(/^<html[^>]*>/i, '')
-        .replace(/<\/html>$/i, '')
-        .replace(/^<head>.*?<\/head>/is, '')
-        .replace(/^<body[^>]*>/i, '')
-        .replace(/<\/body>$/i, '')
-        .trim();
-
-      const cleanedHtml = cleanSpecialCharacters(preliminaryClean);
-
-      console.log('FINAL PROCESSED HTML:');
-      console.log('   Length:', cleanedHtml.length);
-      console.log('END PROCESSOR');
-      
-      return cleanedHtml;
-
-    } catch (error) {
-      console.error('CRITICAL ERROR in processor:', error);
-      return `<div style="color: #dc2626; background: #fef2f2; padding: 12px; border-radius: 6px; border: 1px solid #fecaca;">
-        <strong>Response Processing Error</strong><br/>
-        ${error.message}
-      </div>`;
-    }
-  };
-
   // Request throttling functions
   const checkCooldown = () => {
     const now = Date.now();
@@ -387,7 +379,7 @@ const MedicalResearchGini = () => {
     return true;
   };
 
-  // FIXED: Enhanced send message function with timeout
+  // ENHANCED: Send message function with improved error handling and timeout
   const sendMessage = async () => {
     if (!inputMessage.trim() || isLoading) return;
 
@@ -442,13 +434,12 @@ const MedicalResearchGini = () => {
         userId: userId,
         messageId: messageId,
         timestamp: new Date().toISOString()
-        // REMOVED: imageRequirement (N8N Intent Classifier handles this)
       };
 
       console.log('Sending request to:', N8N_WEBHOOK_URL);
       console.log('Request data:', messageData);
 
-      // FIXED: Add timeout to prevent 110-second hangs
+      // FIXED: Add timeout to prevent hanging requests
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 45000); // 45-second timeout
 
@@ -510,9 +501,9 @@ const MedicalResearchGini = () => {
       
       let errorMessage = 'Sorry, I\'m having trouble processing your request. ';
       
-      // FIXED: Add timeout error handling
+      // ENHANCED: Better error handling with specific timeout handling
       if (error.name === 'AbortError') {
-        errorMessage += 'The request timed out after 45 seconds. Please try a shorter query or check your connection.';
+        errorMessage += 'The request timed out after 90 seconds. Please try a shorter query or check your connection.';
       } else if (error.message.includes('JSON')) {
         errorMessage += 'There was a formatting issue with the response.';
       } else if (error.message.includes('timeout')) {
@@ -521,6 +512,8 @@ const MedicalResearchGini = () => {
         errorMessage += 'The AI service is temporarily unavailable.';
       } else if (error.message.includes('500')) {
         errorMessage += 'There was a server error. Please try again.';
+      } else if (error.message.includes('CORS')) {
+        errorMessage += 'There was a connection issue. Please verify your webhook configuration.';
       } else {
         errorMessage += 'Please check your connection and try again.';
       }
@@ -829,6 +822,8 @@ End of Drug Discovery Session
       .molecular-image-container img {
         cursor: pointer;
         transition: transform 0.2s ease;
+        max-width: 100%;
+        height: auto;
       }
       
       .molecular-image-container img:hover {
@@ -948,7 +943,7 @@ End of Drug Discovery Session
             </div>
           </div>
           
-          {/* Image generation status indicator */}
+          {/* Enhanced status indicator */}
           {(isGeneratingImage || isLoading) && (
             <div className="flex items-center space-x-2 text-blue-200">
               <Loader2 className="w-4 h-4 animate-spin" />
@@ -1241,7 +1236,7 @@ const DetailedFeedbackModal = ({ isOpen, messageContent, onClose, onSubmit }) =>
     rating: 0,
     accuracyRating: 0,
     helpfulnessRating: 0,
-    visualQuality: 0, // New rating for molecular structures
+    visualQuality: 0,
     comment: '',
     improvementSuggestions: '',
     userExpertise: 'intermediate'
