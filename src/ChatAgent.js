@@ -1,4 +1,32 @@
-﻿import React, { useState, useRef, useEffect } from 'react';
+﻿try {
+          console.log('🖼️ Calling image webhook:', IMAGE_WEBHOOK_URL);
+          
+          const imageResponse = await fetch(IMAGE_WEBHOOK_URL, {
+            method: 'POST',
+            mode: 'cors',
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json, text/html, text/plain, */*'
+            },
+            body: JSON.stringify({
+              ...messageData,
+              compound: imageRequirement.compound
+            })
+          });
+
+          console.log('🖼️ Image response status:', imageResponse.status, imageResponse.ok);
+
+          if (imageResponse.ok) {
+            // Get raw response
+            const imageRawText = await imageResponse.text();
+            console.log('🖼️ Image raw response length:', imageRawText.length);
+            console.log('🖼️ Image raw response preview:', imageRawText.substring(0, 500));
+
+            // Parse JSON response
+            let imageData;
+            try {
+              imageData = JSON.parse(imageRawText);
+              import React, { useState, useRef, useEffect } from 'react';
 import { Send, Download, FileText, FileSpreadsheet, User, Loader2, ThumbsUp, ThumbsDown, MessageSquare, X, Star, Clock, Image, Beaker, Atom } from 'lucide-react';
 
 const MedicalResearchGini = () => {
@@ -135,8 +163,9 @@ const MedicalResearchGini = () => {
             
             if (isImageWebhook) {
               // NEW: Handle simplified image webhook response
-              if (firstItem.success && firstItem.image_url) {
-                console.log('✅ Image webhook success, creating structure');
+              if (Array.isArray(jsonData) && jsonData.length > 0 && jsonData[0].success && jsonData[0].image_url) {
+                console.log('✅ Processing image webhook array response');
+                const firstItem = jsonData[0];
                 const metadata = firstItem.metadata || {};
                 
                 finalHtml = `
@@ -157,10 +186,24 @@ const MedicalResearchGini = () => {
                       </div>
                     </div>
                   </div>`;
+              } else if (jsonData.success && jsonData.image_url) {
+                // Handle object format
+                console.log('✅ Processing image webhook object response');
+                const metadata = jsonData.metadata || {};
+                finalHtml = `
+                  <div class="molecular-structure-display" style="background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%); border: 2px solid #3b82f6; border-radius: 12px; padding: 20px; margin: 20px 0; text-align: center; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);">
+                    <div style="background: white; border-radius: 8px; padding: 16px; margin-bottom: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                      <h3 style="color: #1e40af; margin: 0 0 12px 0; font-size: 18px; font-weight: 700;">
+                        🧬 ${metadata.compound || 'Unknown Compound'} - Molecular Structure
+                      </h3>
+                      <img src="${jsonData.image_url}" alt="${metadata.compound || 'Molecular structure'}" style="max-width: 100%; height: auto; border-radius: 6px; box-shadow: 0 2px 6px rgba(0,0,0,0.1);" />
+                    </div>
+                  </div>`;
               } else {
+                // Error case for image webhook
                 finalHtml = `<div style="padding: 12px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 6px; color: #dc2626;">
                   <strong>Molecular Structure Error</strong><br/>
-                  <p>${firstItem.error || 'Failed to generate molecular structure'}</p>
+                  <p>${(Array.isArray(jsonData) ? jsonData[0]?.error : jsonData.error) || 'Failed to generate molecular structure'}</p>
                 </div>`;
               }
             } else {
@@ -428,6 +471,11 @@ const MedicalResearchGini = () => {
 
       // STEP 2: Get image if needed
       if (imageRequirement.needsImage) {
+        console.log('🚀 IMAGE DETECTION TRIGGERED:');
+        console.log('- Image requirement:', imageRequirement);
+        console.log('- Compound detected:', imageRequirement.compound);
+        console.log('- Confidence:', imageRequirement.confidence);
+        console.log('- URL to call:', IMAGE_WEBHOOK_URL);
         console.log('🖼️ Starting image request...');
         
         // Show loading indicator
