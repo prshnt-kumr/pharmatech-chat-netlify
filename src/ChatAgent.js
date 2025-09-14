@@ -691,7 +691,7 @@ const MedicalResearchGini = () => {
       let textError = null;
       let imageError = null;
 
-      // STEP 1: Always get text response
+      // STEP 1: Always get text response FIRST and wait for completion
       logger.info('Fetching text response', { url: TEXT_WEBHOOK_URL });
       
       try {
@@ -710,19 +710,54 @@ const MedicalResearchGini = () => {
         }
 
         textContent = await processResponse(textResponse, false);
-        logger.info('Text content processed successfully', { length: textContent.length });
+        logger.info('Text content processed successfully', { 
+          length: textContent.length, 
+          preview: textContent.substring(0, 100) + '...'
+        });
+
+        // Validate text content
+        if (!textContent || textContent.trim().length < 10) {
+          logger.warn('Text content is too short or empty', { content: textContent });
+          textContent = `<div style="padding: 12px; background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 6px; margin-bottom: 16px;">
+            <p><strong>Limited Text Response</strong></p>
+            <p>The text response was shorter than expected. Please try rephrasing your question.</p>
+          </div>`;
+        }
+
       } catch (error) {
         logger.error('Text request failed', error);
         textError = error;
         textContent = `<div style="color: #dc2626; background: #fef2f2; padding: 12px; border-radius: 6px; margin-bottom: 16px;">
           <strong>Text Response Error</strong><br/>
           <p>Unable to process text response: ${error.message}</p>
+          <details style="margin-top: 8px;">
+            <summary style="cursor: pointer; font-size: 12px;">Error Details</summary>
+            <pre style="font-size: 10px; margin: 4px 0; white-space: pre-wrap;">${error.stack || error.toString()}</pre>
+          </details>
         </div>`;
       }
 
-      // STEP 2: Get image if needed
+      // Update processing message to show text is complete
+      setMessages(prev => prev.map(msg => 
+        msg.id === processingMessageId ? {
+          ...msg,
+          content: imageRequirement.needsImage ? 
+            `<div style="padding: 12px; background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%); border: 2px solid #3b82f6; border-radius: 12px; text-align: center; margin: 10px 0;">
+              <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
+                <div style="color: #10b981; font-weight: 600;">✅ Text content ready</div>
+                <div style="width: 16px; height: 16px; border: 2px solid #3b82f6; border-top: 2px solid transparent; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                <span style="color: #1e40af; font-weight: 600;">Now generating molecular structure for ${imageRequirement.compound}...</span>
+              </div>
+            </div>` :
+            `<div style="padding: 12px; background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%); border: 2px solid #10b981; border-radius: 12px; text-align: center; margin: 10px 0;">
+              <div style="color: #10b981; font-weight: 600;">✅ Response ready</div>
+            </div>`
+        } : msg
+      ));
+
+      // STEP 2: Get image if needed (ONLY after text is complete)
       if (imageRequirement.needsImage) {
-        logger.image('Starting image request', { compound: imageRequirement.compound, url: IMAGE_WEBHOOK_URL });
+        logger.image('Starting image request after text completion', { compound: imageRequirement.compound, url: IMAGE_WEBHOOK_URL });
         
         try {
           const imageResponse = await fetch(IMAGE_WEBHOOK_URL, {
@@ -753,17 +788,44 @@ const MedicalResearchGini = () => {
           imageContent = `<div style="padding: 12px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 6px; color: #dc2626; margin-top: 16px;">
             <strong>Molecular Structure Unavailable</strong><br/>
             <p style="margin: 8px 0 0 0; font-size: 14px;">Unable to generate molecular structure: ${error.message}</p>
+            <details style="margin-top: 8px;">
+              <summary style="cursor: pointer; font-size: 12px;">Error Details</summary>
+              <pre style="font-size: 10px; margin: 4px 0; white-space: pre-wrap;">${error.stack || error.toString()}</pre>
+            </details>
           </div>`;
         }
       }
 
-      // STEP 3: Combine content
-      let combinedContent = textContent;
+      // STEP 3: Carefully combine content with logging
+      logger.debug('Combining content', { 
+        textLength: textContent.length,
+        imageLength: imageContent.length,
+        hasImage: imageRequirement.needsImage,
+        textPreview: textContent.substring(0, 50) + '...',
+        imagePreview: imageContent.substring(0, 50) + '...'
+      });
+
+      let combinedContent = '';
       
-      if (imageRequirement.needsImage && imageContent) {
-        // Add spacing between text and image content
-        const spacing = '<div style="margin: 20px 0;"></div>';
-        combinedContent = textContent + spacing + imageContent;
+      // Ensure text content is always included first
+      if (textContent && textContent.trim()) {
+        combinedContent = textContent;
+        logger.debug('Added text content to combined response');
+      } else {
+        combinedContent = `<div style="padding: 12px; background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 6px;">
+          <p><strong>Text Content Missing</strong></p>
+          <p>The text portion of the response was not received properly.</p>
+        </div>`;
+        logger.warn('Text content was missing, added fallback message');
+      }
+      
+      // Add image content if available
+      if (imageRequirement.needsImage && imageContent && imageContent.trim()) {
+        const spacing = '<div style="margin: 24px 0; border-top: 1px solid #e5e7eb; padding-top: 24px;"></div>';
+        combinedContent += spacing + imageContent;
+        logger.debug('Added image content to combined response');
+      } else if (imageRequirement.needsImage) {
+        logger.warn('Image was expected but content was missing or empty');
       }
 
       // STEP 4: Create final combined message
