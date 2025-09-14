@@ -1336,7 +1336,7 @@ End of Drug Discovery Session
           <span>Dual Webhook Architecture Enabled</span>
           <br />
           <span className="text-xs text-gray-400">
-            Text: {TEXT_WEBHOOK_URL.split('/').pop()} | Image: {IMAGE_WEBHOOK_URL.split('/').pop()} | Session: {getSessionId().split('_')[1]}
+            Text: Chatbot_text | Image: Chatbot_image | Session: {getSessionId().split('_')[1]}
           </span>
         </div>
       </div>
