@@ -2,6 +2,7 @@
 import { Send, Download, FileText, FileSpreadsheet, User, Loader2, ThumbsUp, ThumbsDown, MessageSquare, X, Star, Clock, Image, Beaker, Atom } from 'lucide-react';
 
 const MedicalResearchGini = () => {
+  // ===== STATE MANAGEMENT =====
   const [messages, setMessages] = useState([
     {
       id: 1,
@@ -18,276 +19,15 @@ const MedicalResearchGini = () => {
   const [cooldownTimeLeft, setCooldownTimeLeft] = useState(0);
   const messagesEndRef = useRef(null);
 
-  // Dual Webhook Configuration
+  // ===== CONFIGURATION =====
   const TEXT_WEBHOOK_URL = process.env.REACT_APP_TEXT_WEBHOOK_URL || 'https://prshntkumrai.app.n8n.cloud/webhook/Chatbot_text';
   const IMAGE_WEBHOOK_URL = process.env.REACT_APP_IMAGE_WEBHOOK_URL || 'https://prshntkumrai.app.n8n.cloud/webhook/Chatbot_image';
   const FEEDBACK_WEBHOOK_URL = 'https://prshntkumrai.app.n8n.cloud/webhook/webhook/Chatbot/feedback';
   const REQUEST_COOLDOWN = 180000; // 3 minutes
 
-  // Utility Functions
+  // ===== UTILITY FUNCTIONS =====
   const generateSessionId = () => `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   const generateMessageId = (type) => `${type}_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
-
-  // Enhanced image detection logic
-  const detectImageRequirement = (message) => {
-    const imageKeywords = [
-      'structure', 'molecular structure', 'chemical structure', 'show structure',
-      'visualize', 'visualization', 'diagram', 'image', 'picture',
-      '2d', '3d', 'three dimensional', 'two dimensional', 'render',
-      'molecule', 'compound', 'formula', 'bond', 'conformation',
-      'show me', 'display', 'draw', 'generate image', 'create visualization'
-    ];
-    
-    const molecularCompounds = [
-      'chromene', 'benzene', 'caffeine', 'aspirin', 'penicillin', 
-      'dopamine', 'serotonin', 'acetaminophen', 'ibuprofen', 'rochelle'
-    ];
-    
-    const lowerMessage = message.toLowerCase();
-    const hasImageKeyword = imageKeywords.some(keyword => lowerMessage.includes(keyword));
-    const hasMolecularCompound = molecularCompounds.some(compound => lowerMessage.includes(compound));
-    
-    return {
-      needsImage: hasImageKeyword || (hasMolecularCompound && (hasImageKeyword || lowerMessage.includes('structure'))),
-      imageType: lowerMessage.includes('3d') ? '3d' : '2d',
-      compound: extractCompoundName(message),
-      confidence: hasImageKeyword ? 'high' : hasMolecularCompound ? 'medium' : 'low'
-    };
-  };
-
-  const extractCompoundName = (message) => {
-    const compounds = ['chromene', 'benzene', 'caffeine', 'aspirin', 'penicillin', 'dopamine', 'serotonin', 'rochelle'];
-    const found = compounds.find(compound => message.toLowerCase().includes(compound));
-    const formulaMatch = message.match(/([A-Z][a-z]?\d*)+/g);
-    return found || (formulaMatch && formulaMatch[0]) || 'unknown';
-  };
-
-  // Enhanced text cleaning function that preserves base64 images
-  const cleanSpecialCharacters = (text) => {
-    if (!text || typeof text !== 'string') return text;
-    
-    // CRITICAL: Skip processing if text contains base64 images
-    if (text.includes('data:image/') && text.includes('base64,')) {
-      console.log('Skipping cleanSpecialCharacters - contains base64 images');
-      return text
-        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-        .replace(/\*(.*?)\*/g, '<em>$1</em>')
-        .replace(/#{1,6}\s+(.*?)(?:\n|$)/g, '<h3>$1</h3>')
-        .replace(/^[\s]*[-*+]\s+/gm, '• ')
-        .replace(/\\n/g, '<br>')
-        .replace(/\\t/g, '&nbsp;&nbsp;&nbsp;&nbsp;')
-        .replace(/\\"/g, '"')
-        .replace(/\\'/g, "'")
-        .trim();
-    }
-    
-    return text
-      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-      .replace(/\*(.*?)\*/g, '<em>$1</em>')
-      .replace(/#{1,6}\s+(.*?)(?:\n|$)/g, '<h3>$1</h3>')
-      .replace(/^[\s]*[-*+]\s+/gm, '• ')
-      .replace(/^\s*\d+\.\s+/gm, (match, offset, string) => {
-        const lineStart = string.lastIndexOf('\n', offset) + 1;
-        const lineNum = string.substring(0, offset).split('\n').length;
-        return `${lineNum}. `;
-      })
-      .replace(/\\n/g, '<br>')
-      .replace(/\\t/g, '&nbsp;&nbsp;&nbsp;&nbsp;')
-      .replace(/\\"/g, '"')
-      .replace(/\\'/g, "'")
-      .replace(/&nbsp;/g, ' ')
-      .replace(/&quot;/g, '"')
-      .replace(/&apos;/g, "'")
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>')
-      .replace(/&amp;/g, '&')
-      .replace(/\n{3,}/g, '\n\n')
-      .replace(/\s{3,}/g, ' ')
-      .replace(/^\s+|\s+$/gm, '')
-      .replace(/([A-Z][a-z]?)(\d+)/g, '$1<sub>$2</sub>')
-      .replace(/\^(\d+)/g, '<sup>$1</sup>')
-      .trim();
-  };
-
-  // HTML sanitization that preserves base64 images
-  const formatHTMLContent = (htmlString) => {
-    if (!htmlString) return '';
-    
-    console.log('Formatting HTML content, length:', htmlString.length);
-    console.log('Contains img tags:', htmlString.includes('<img'));
-    console.log('Contains base64:', htmlString.includes('data:image/'));
-    
-    // Skip sanitization if we detect base64 images - just return as-is
-    if (htmlString.includes('data:image/png;base64,') || htmlString.includes('data:image/jpeg;base64,')) {
-      console.log('Base64 images detected - skipping sanitization to preserve data');
-      return htmlString;
-    }
-    
-    // Only do minimal sanitization for safety
-    return htmlString
-      .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-      .replace(/javascript:/gi, '')
-      .replace(/on\w+\s*=/gi, '');
-  };
-
-  // Debug function for image display
-  const debugImageDisplay = (htmlContent) => {
-    console.log('=== IMAGE DEBUG ===');
-    console.log('HTML length:', htmlContent.length);
-    console.log('Contains img tag:', htmlContent.includes('<img'));
-    console.log('Contains data:image:', htmlContent.includes('data:image/'));
-    
-    const imgRegex = /<img[^>]*src="data:image\/([^;]+);base64,([^"]*)"[^>]*>/gi;
-    let match;
-    let imageCount = 0;
-    
-    while ((match = imgRegex.exec(htmlContent)) !== null) {
-      imageCount++;
-      const [, format, base64Data] = match;
-      
-      console.log(`Image ${imageCount}:`);
-      console.log('  Format:', format);
-      console.log('  Base64 length:', base64Data.length);
-      console.log('  Base64 preview:', base64Data.substring(0, 50) + '...');
-      
-      try {
-        const isValidBase64 = /^[A-Za-z0-9+/]*={0,2}$/.test(base64Data.replace(/\s/g, ''));
-        console.log('  Valid base64:', isValidBase64);
-      } catch (e) {
-        console.error(`  Image ${imageCount} validation error:`, e);
-      }
-    }
-    
-    console.log('Total images found:', imageCount);
-    console.log('=== END DEBUG ===');
-  };
-
-  // Enhanced response processor
-  const processResponse = async (response, originalMessage = '') => {
-    console.log('Processing response - Status:', response.status);
-    
-    const contentType = response.headers.get('content-type') || '';
-    console.log('Content-Type:', contentType);
-
-    try {
-      const rawText = await response.text();
-      console.log('Raw response length:', rawText.length);
-      console.log('Raw response preview:', rawText.substring(0, 200));
-
-      let finalHtml = '';
-
-      // Check if response is direct HTML or JSON
-      if (rawText.includes('<div class="molecular-structure-display"') || 
-          rawText.includes('<img') || 
-          rawText.includes('<p><strong>')) {
-        console.log('Processing direct HTML format from N8n');
-        finalHtml = rawText;
-      }
-      else if (rawText.trim().startsWith('{') || rawText.trim().startsWith('[')) {
-        console.log('Processing JSON format');
-        try {
-          const jsonData = JSON.parse(rawText);
-          console.log('Parsed JSON structure:', typeof jsonData, Array.isArray(jsonData));
-          
-          if (Array.isArray(jsonData)) {
-            console.log('Processing JSON array with', jsonData.length, 'items');
-            if (jsonData.length > 0) {
-              const firstItem = jsonData[0];
-              console.log('First item keys:', Object.keys(firstItem));
-              
-              finalHtml = firstItem.output || 
-                         firstItem.response || 
-                         firstItem.content || 
-                         firstItem.message || 
-                         '';
-              
-              console.log('Extracted content length:', finalHtml.length);
-              console.log('Contains base64 image:', finalHtml.includes('data:image/'));
-            }
-          } else if (typeof jsonData === 'object') {
-            console.log('Processing JSON object with keys:', Object.keys(jsonData));
-            finalHtml = jsonData.output || 
-                       jsonData.response || 
-                       jsonData.content || 
-                       jsonData.message || 
-                       jsonData.safeResponse ||
-                       jsonData.text ||
-                       jsonData.data ||
-                       jsonData.molecular_html || // ← Add this for image webhook
-                       JSON.stringify(jsonData, null, 2);
-          }
-        } catch (jsonError) {
-          console.log('JSON parsing failed:', jsonError.message);
-          console.log('Treating as plain text/HTML instead');
-          finalHtml = rawText;
-        }
-      }
-      else if (rawText.includes('<h2>') || rawText.includes('<h3>') || rawText.includes('<p>') || rawText.includes('<div')) {
-        console.log('Processing direct HTML format');
-        finalHtml = rawText;
-      }
-      else {
-        console.log('Processing plain text format');
-        const formattedText = rawText.replace(/\n/g, '<br>');
-        finalHtml = `<p>${formattedText}</p>`;
-      }
-
-      // Process escaped characters
-      if (typeof finalHtml === 'string') {
-        if (finalHtml.includes('\\n')) {
-          finalHtml = finalHtml.replace(/\\n/g, '<br>');
-        }
-        
-        if (finalHtml.includes('\\u')) {
-          finalHtml = finalHtml.replace(/\\u([0-9a-fA-F]{4})/g, (match, code) => {
-            return String.fromCharCode(parseInt(code, 16));
-          });
-        }
-      }
-
-      // Validate final content
-      if (!finalHtml || finalHtml.trim().length < 3) {
-        console.warn('Final content is too short');
-        return `<div style="padding: 12px; background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 6px;">
-          <p><strong>Content Processing Issue</strong></p>
-          <p>Processed response but content appears empty or too short.</p>
-          <p><small>Raw response length: ${rawText.length}</small></p>
-        </div>`;
-      }
-
-      // Enhanced final cleanup - preserve base64 images
-      const preliminaryClean = finalHtml
-        .replace(/^<!DOCTYPE[^>]*>/i, '')
-        .replace(/^<html[^>]*>/i, '')
-        .replace(/<\/html>$/i, '')
-        .replace(/^<head>.*?<\/head>/is, '')
-        .replace(/^<body[^>]*>/i, '')
-        .replace(/<\/body>$/i, '')
-        .trim();
-
-      const cleanedHtml = cleanSpecialCharacters(preliminaryClean);
-
-      // Debug images if present
-      if (cleanedHtml.includes('<img')) {
-        debugImageDisplay(cleanedHtml);
-      }
-
-      console.log('FINAL PROCESSED HTML:');
-      console.log('   Length:', cleanedHtml.length);
-      console.log('   Contains molecular structure:', cleanedHtml.includes('molecular-structure-display'));
-      console.log('   Contains image:', cleanedHtml.includes('<img'));
-      console.log('   Contains base64:', cleanedHtml.includes('data:image/'));
-      
-      return cleanedHtml;
-
-    } catch (error) {
-      console.error('CRITICAL ERROR in processor:', error);
-      return `<div style="color: #dc2626; background: #fef2f2; padding: 12px; border-radius: 6px; border: 1px solid #fecaca;">
-        <strong>Response Processing Error</strong><br/>
-        ${error.message}
-      </div>`;
-    }
-  };
 
   const getSessionId = () => {
     let sessionId = localStorage.getItem('dr_gini_session_id');
@@ -312,12 +52,212 @@ const MedicalResearchGini = () => {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // Content Processing Functions
+  // ===== IMAGE DETECTION LOGIC =====
+  const detectImageRequirement = (message) => {
+    const imageKeywords = [
+      'structure', 'molecular structure', 'chemical structure', 'show structure',
+      'visualize', 'visualization', 'diagram', 'image', 'picture', 'display',
+      '2d', '3d', 'three dimensional', 'two dimensional', 'render',
+      'molecule', 'compound', 'formula', 'bond', 'conformation',
+      'show me', 'draw', 'generate image', 'create visualization', 'with image'
+    ];
+    
+    const molecularCompounds = [
+      'chromene', 'benzene', 'caffeine', 'aspirin', 'penicillin', 
+      'dopamine', 'serotonin', 'acetaminophen', 'ibuprofen', 'rochelle', 'salt'
+    ];
+    
+    const lowerMessage = message.toLowerCase();
+    const hasImageKeyword = imageKeywords.some(keyword => lowerMessage.includes(keyword));
+    const hasCompound = molecularCompounds.some(compound => lowerMessage.includes(compound));
+    
+    return {
+      needsImage: hasImageKeyword || hasCompound,
+      imageType: lowerMessage.includes('3d') ? '3d' : '2d',
+      compound: extractCompoundName(message),
+      confidence: hasImageKeyword ? 'high' : hasCompound ? 'medium' : 'low'
+    };
+  };
+
+  const extractCompoundName = (message) => {
+    const compounds = ['chromene', 'benzene', 'caffeine', 'aspirin', 'penicillin', 'dopamine', 'serotonin', 'rochelle salt', 'rochelle'];
+    const found = compounds.find(compound => message.toLowerCase().includes(compound));
+    const formulaMatch = message.match(/([A-Z][a-z]?\d*)+/g);
+    return found || (formulaMatch && formulaMatch[0]) || 'unknown';
+  };
+
+  // ===== TEXT PROCESSING FUNCTIONS =====
+  const cleanSpecialCharacters = (text) => {
+    if (!text || typeof text !== 'string') return text;
+    
+    // CRITICAL: Preserve base64 images - minimal processing only
+    if (text.includes('data:image/') && text.includes('base64,')) {
+      console.log('Base64 images detected - minimal processing to preserve data');
+      return text
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.*?)\*/g, '<em>$1</em>')
+        .replace(/#{1,6}\s+(.*?)(?:\n|$)/g, '<h3>$1</h3>')
+        .replace(/\\n/g, '<br>')
+        .replace(/\\"/g, '"')
+        .replace(/\\'/g, "'")
+        .trim();
+    }
+    
+    // Full processing for text without images
+    return text
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*(.*?)\*/g, '<em>$1</em>')
+      .replace(/#{1,6}\s+(.*?)(?:\n|$)/g, '<h3>$1</h3>')
+      .replace(/^[\s]*[-*+]\s+/gm, '• ')
+      .replace(/\\n/g, '<br>')
+      .replace(/\\t/g, '&nbsp;&nbsp;&nbsp;&nbsp;')
+      .replace(/\\"/g, '"')
+      .replace(/\\'/g, "'")
+      .replace(/([A-Z][a-z]?)(\d+)/g, '$1<sub>$2</sub>')
+      .replace(/\^(\d+)/g, '<sup>$1</sup>')
+      .replace(/\n{3,}/g, '\n\n')
+      .replace(/\s{3,}/g, ' ')
+      .trim();
+  };
+
+  const formatHTMLContent = (htmlString) => {
+    if (!htmlString) return '';
+    
+    // Preserve base64 images completely - no sanitization
+    if (htmlString.includes('data:image/png;base64,') || htmlString.includes('data:image/jpeg;base64,')) {
+      console.log('Base64 images detected - returning content as-is');
+      return htmlString;
+    }
+    
+    // Basic sanitization for safety (only for non-image content)
+    return htmlString
+      .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+      .replace(/javascript:/gi, '')
+      .replace(/on\w+\s*=/gi, '');
+  };
+
+  // ===== ENHANCED RESPONSE PROCESSOR =====
+  const processResponse = async (response, isImageWebhook = false) => {
+    console.log(`Processing ${isImageWebhook ? 'IMAGE' : 'TEXT'} response - Status:`, response.status);
+    
+    try {
+      const rawText = await response.text();
+      console.log(`Raw ${isImageWebhook ? 'image' : 'text'} response length:`, rawText.length);
+      console.log('Response preview:', rawText.substring(0, 200));
+
+      let finalHtml = '';
+
+      // Handle JSON responses (common for image webhook)
+      if (rawText.trim().startsWith('{') || rawText.trim().startsWith('[')) {
+        try {
+          const jsonData = JSON.parse(rawText);
+          console.log('Parsed JSON, keys:', Object.keys(jsonData));
+          
+          if (Array.isArray(jsonData) && jsonData.length > 0) {
+            const firstItem = jsonData[0];
+            console.log('Array item keys:', Object.keys(firstItem));
+            
+            // PRIORITY ORDER: molecular_html (for images) -> output -> response -> content
+            finalHtml = firstItem.molecular_html || 
+                       firstItem.output || 
+                       firstItem.response || 
+                       firstItem.content || 
+                       firstItem.message || '';
+          } else if (typeof jsonData === 'object') {
+            // PRIORITY ORDER: molecular_html (for images) -> output -> response -> content  
+            finalHtml = jsonData.molecular_html || 
+                       jsonData.output || 
+                       jsonData.response || 
+                       jsonData.content || 
+                       jsonData.message || 
+                       jsonData.text || '';
+            
+            console.log('Extracted content length:', finalHtml.length);
+            console.log('Contains molecular structure:', finalHtml.includes('molecular-structure-display'));
+          }
+        } catch (jsonError) {
+          console.log('JSON parsing failed:', jsonError.message);
+          finalHtml = rawText;
+        }
+      }
+      // Handle direct HTML responses
+      else if (rawText.includes('<div') || rawText.includes('<p') || rawText.includes('<h')) {
+        console.log('Processing direct HTML format');
+        finalHtml = rawText;
+      }
+      // Handle plain text
+      else {
+        console.log('Processing plain text format');
+        finalHtml = `<p>${rawText.replace(/\n/g, '<br>')}</p>`;
+      }
+
+      // Process escaped characters
+      if (typeof finalHtml === 'string' && finalHtml.includes('\\')) {
+        finalHtml = finalHtml
+          .replace(/\\n/g, '<br>')
+          .replace(/\\"/g, '"')
+          .replace(/\\'/g, "'")
+          .replace(/\\u([0-9a-fA-F]{4})/g, (match, code) => {
+            return String.fromCharCode(parseInt(code, 16));
+          });
+      }
+
+      // Validate content
+      if (!finalHtml || finalHtml.trim().length < 5) {
+        console.warn('Response content too short or empty');
+        if (isImageWebhook) {
+          return `<div style="padding: 12px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 6px; color: #dc2626;">
+            <strong>Molecular Structure Unavailable</strong><br/>
+            <p>Unable to generate molecular structure at this time.</p>
+          </div>`;
+        } else {
+          return `<div style="padding: 12px; background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 6px;">
+            <p><strong>Response Processing Issue</strong></p>
+            <p>The response appears to be empty or too short. Please try again.</p>
+          </div>`;
+        }
+      }
+
+      // Clean up HTML structure
+      const cleanedHtml = finalHtml
+        .replace(/^<!DOCTYPE[^>]*>/i, '')
+        .replace(/^<html[^>]*>|<\/html>$/gi, '')
+        .replace(/<head>.*?<\/head>/gis, '')
+        .replace(/^<body[^>]*>|<\/body>$/gi, '')
+        .trim();
+
+      const processedHtml = cleanSpecialCharacters(cleanedHtml);
+      const formattedHtml = formatHTMLContent(processedHtml);
+
+      // Debug molecular structures
+      if (formattedHtml.includes('molecular-structure-display')) {
+        console.log('✅ Molecular structure detected and processed');
+        const imgCount = (formattedHtml.match(/<img[^>]*>/gi) || []).length;
+        console.log(`   Contains ${imgCount} image(s)`);
+      }
+
+      console.log(`FINAL PROCESSED ${isImageWebhook ? 'IMAGE' : 'TEXT'}:`, {
+        length: formattedHtml.length,
+        hasImages: formattedHtml.includes('<img'),
+        hasMolecularStructure: formattedHtml.includes('molecular-structure-display')
+      });
+
+      return formattedHtml;
+
+    } catch (error) {
+      console.error(`CRITICAL ERROR processing ${isImageWebhook ? 'image' : 'text'} response:`, error);
+      return `<div style="color: #dc2626; background: #fef2f2; padding: 12px; border-radius: 6px;">
+        <strong>${isImageWebhook ? 'Image' : 'Text'} Processing Error</strong><br/>
+        ${error.message}
+      </div>`;
+    }
+  };
+
+  // ===== MESSAGE RENDERING =====
   const isHTMLContent = (content) => /<[a-z][\s\S]*>/i.test(content);
 
   const htmlToPlainText = (html) => {
     if (!isHTMLContent(html)) return html;
-    
     return html
       .replace(/<h[1-6][^>]*>/g, '\n\n')
       .replace(/<\/h[1-6]>/g, '\n')
@@ -326,35 +266,23 @@ const MedicalResearchGini = () => {
       .replace(/<br\s*\/?>/g, '\n')
       .replace(/<li[^>]*>/g, '\n• ')
       .replace(/<\/li>/g, '')
-      .replace(/<ul[^>]*>|<\/ul>/g, '\n')
-      .replace(/<ol[^>]*>|<\/ol>/g, '\n')
       .replace(/<strong[^>]*>(.*?)<\/strong>/g, '$1')
       .replace(/<em[^>]*>(.*?)<\/em>/g, '$1')
-      .replace(/<sub[^>]*>(.*?)<\/sub>/g, '$1')
-      .replace(/<sup[^>]*>(.*?)<\/sup>/g, '$1')
       .replace(/<img[^>]*>/g, '[Image]')
       .replace(/<[^>]*>/g, '')
       .replace(/\n\n+/g, '\n\n')
       .trim();
   };
 
-  // Enhanced message content renderer
   const renderMessageContent = (message) => {
     if (message.isHTML && message.type === 'bot') {
       const cleanedContent = cleanSpecialCharacters(message.content);
       const formattedContent = formatHTMLContent(cleanedContent);
       
-      if (formattedContent.includes('<img')) {
-        console.log('Rendering message with images');
-        console.log('Message content preview:', formattedContent.substring(0, 500));
-      }
-      
       return (
         <div 
           className="research-content"
-          dangerouslySetInnerHTML={{ 
-            __html: formattedContent
-          }}
+          dangerouslySetInnerHTML={{ __html: formattedContent }}
           style={{
             lineHeight: '1.7',
             fontSize: '14px',
@@ -368,7 +296,6 @@ const MedicalResearchGini = () => {
       );
     } else {
       const cleanedText = cleanSpecialCharacters(message.content);
-      
       return (
         <div 
           className="whitespace-pre-wrap research-content" 
@@ -379,7 +306,7 @@ const MedicalResearchGini = () => {
     }
   };
 
-  // Request throttling functions
+  // ===== REQUEST THROTTLING =====
   const checkCooldown = () => {
     const now = Date.now();
     const timeSinceLastRequest = now - lastRequestTime;
@@ -394,7 +321,7 @@ const MedicalResearchGini = () => {
     return true;
   };
 
-  // DUAL WEBHOOK SEND MESSAGE FUNCTION
+  // ===== MAIN SEND MESSAGE FUNCTION =====
   const sendMessage = async () => {
     if (!inputMessage.trim() || isLoading) return;
 
@@ -416,11 +343,9 @@ const MedicalResearchGini = () => {
       console.log('Request already in progress, ignoring duplicate');
       return;
     }
-
     window.requestInProgress = true;
 
     const sessionId = getSessionId();
-    const userId = `user_${Date.now()}`;
     const requestId = `request_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
     const messageId = generateMessageId('user');
 
@@ -443,22 +368,20 @@ const MedicalResearchGini = () => {
     setIsLoading(true);
     setLastRequestTime(Date.now());
 
-    // Create message data for both webhooks
+    // Message data for webhooks
     const messageData = {
       message: currentMessage,
       sessionId: sessionId,
-      userId: userId,
+      userId: `user_${Date.now()}`,
       messageId: messageId,
       requestId: requestId,
       timestamp: new Date().toISOString()
     };
 
     console.log('🚀 Starting dual webhook requests...');
-    console.log('📝 Text webhook:', TEXT_WEBHOOK_URL);
-    console.log('🖼️ Image webhook:', IMAGE_WEBHOOK_URL);
 
     try {
-      // STEP 1: Always get text response first (should be fast)
+      // STEP 1: Get text response (always)
       console.log('📝 Fetching text response...');
       
       const textResponse = await fetch(TEXT_WEBHOOK_URL, {
@@ -466,26 +389,19 @@ const MedicalResearchGini = () => {
         mode: 'cors',
         headers: {
           'Content-Type': 'application/json',
-          'Accept': 'application/json, text/html, text/plain, */*',
-          'Origin': window.location.origin
+          'Accept': 'application/json, text/html, text/plain, */*'
         },
         body: JSON.stringify(messageData)
-      });
-
-      console.log('📝 Text response received:', {
-        status: textResponse.status,
-        ok: textResponse.ok
       });
 
       if (!textResponse.ok) {
         throw new Error(`Text webhook error: ${textResponse.status} - ${textResponse.statusText}`);
       }
 
-      // Process text response immediately
-      const textContent = await processResponse(textResponse, currentMessage);
+      const textContent = await processResponse(textResponse, false);
       console.log('✅ Text content processed, length:', textContent.length);
 
-      // Create initial bot message with text content
+      // Create bot message with text content
       const initialBotMessageId = Date.now() + 1;
       const textBotMessage = {
         id: initialBotMessageId,
@@ -495,19 +411,18 @@ const MedicalResearchGini = () => {
         isHTML: true,
         messageId: generateMessageId('gini'),
         hasImages: false,
-        isPartial: imageRequirement.needsImage, // Indicates more content coming
+        isPartial: imageRequirement.needsImage,
         requestId: requestId
       };
 
-      console.log('📝 Displaying text response immediately');
       setMessages(prev => [...prev, textBotMessage]);
-      setIsLoading(false); // Stop loading for text content
+      setIsLoading(false);
 
-      // STEP 2: If image is needed, start image request
+      // STEP 2: Get image if needed
       if (imageRequirement.needsImage) {
         console.log('🖼️ Starting image request...');
         
-        // Show image loading indicator
+        // Show loading indicator
         const imageLoadingMessage = {
           id: Date.now() + 2,
           type: 'bot',
@@ -526,15 +441,13 @@ const MedicalResearchGini = () => {
 
         setMessages(prev => [...prev, imageLoadingMessage]);
 
-        // Fetch image response
         try {
           const imageResponse = await fetch(IMAGE_WEBHOOK_URL, {
             method: 'POST',
             mode: 'cors',
             headers: {
               'Content-Type': 'application/json',
-              'Accept': 'application/json, text/html, text/plain, */*',
-              'Origin': window.location.origin
+              'Accept': 'application/json, text/html, text/plain, */*'
             },
             body: JSON.stringify({
               ...messageData,
@@ -542,21 +455,14 @@ const MedicalResearchGini = () => {
             })
           });
 
-          console.log('🖼️ Image response received:', {
-            status: imageResponse.status,
-            ok: imageResponse.ok
-          });
-
           if (imageResponse.ok) {
-            const imageContent = await processResponse(imageResponse, currentMessage);
+            const imageContent = await processResponse(imageResponse, true);
             console.log('✅ Image content processed, length:', imageContent.length);
 
-            // Remove loading message and add final combined message
+            // Remove loading message and combine with text
             setMessages(prev => {
-              // Remove the image loading message
-              const filteredMessages = prev.filter(msg => msg.requestId !== requestId || !msg.isImageLoading);
+              const filteredMessages = prev.filter(msg => !(msg.requestId === requestId && msg.isImageLoading));
               
-              // Update the original text message to include image content
               const updatedMessages = filteredMessages.map(msg => 
                 msg.id === initialBotMessageId ? {
                   ...msg,
@@ -578,7 +484,7 @@ const MedicalResearchGini = () => {
           
           // Remove loading message and show error
           setMessages(prev => {
-            const filteredMessages = prev.filter(msg => msg.requestId !== requestId || !msg.isImageLoading);
+            const filteredMessages = prev.filter(msg => !(msg.requestId === requestId && msg.isImageLoading));
             
             const errorMessage = {
               id: Date.now() + 3,
@@ -601,9 +507,8 @@ const MedicalResearchGini = () => {
       console.error('📝 Text request failed:', textError);
       
       let errorMessage = 'Sorry, I\'m having trouble processing your request. ';
-      
       if (textError.message.includes('404')) {
-        errorMessage += 'The text service is temporarily unavailable.';
+        errorMessage += 'The service is temporarily unavailable.';
       } else if (textError.message.includes('500')) {
         errorMessage += 'There was a server error. Please try again.';
       } else {
@@ -624,7 +529,7 @@ const MedicalResearchGini = () => {
     }
   };
 
-  // Feedback Functions
+  // ===== FEEDBACK FUNCTIONS =====
   const handleQuickFeedback = async (messageId, rating) => {
     try {
       const feedback = {
@@ -687,7 +592,6 @@ const MedicalResearchGini = () => {
             rating: feedbackData.rating 
           }
         }));
-
         setFeedbackModal({ open: false, messageId: null, messageContent: '' });
       }
     } catch (error) {
@@ -695,7 +599,7 @@ const MedicalResearchGini = () => {
     }
   };
 
-  // Download Functions
+  // ===== DOWNLOAD FUNCTIONS =====
   const downloadChatAsText = () => {
     const chatContent = messages
       .filter(msg => msg.type !== 'bot' || !msg.isError)
@@ -707,7 +611,7 @@ const MedicalResearchGini = () => {
       })
       .join('\n\n');
 
-    const content = `PharmaTech Innovations - DrugDiscovery AI
+    const fullContent = `PharmaTech Innovations - DrugDiscovery AI
 Drug Discovery Research Session Export (With Molecular Visualizations)
 Generated on: ${new Date().toLocaleString()}
 Total Messages: ${messages.length}
@@ -721,7 +625,7 @@ End of Drug Discovery Session
 © PharmaTech Innovations`;
 
     const element = document.createElement('a');
-    const file = new Blob([content], { type: 'text/plain' });
+    const file = new Blob([fullContent], { type: 'text/plain' });
     element.href = URL.createObjectURL(file);
     element.download = `pharmatech-drugdiscovery-enhanced-${Date.now()}.txt`;
     document.body.appendChild(element);
@@ -740,7 +644,7 @@ End of Drug Discovery Session
       })
       .join('\n\n');
 
-    const content = `PharmaTech Innovations - DrugDiscovery AI
+    const fullContent = `PharmaTech Innovations - DrugDiscovery AI
 Drug Discovery Research Session Export (Enhanced with Molecular Visualizations)
 Generated on: ${new Date().toLocaleString()}
 Total Messages: ${messages.length}
@@ -754,7 +658,7 @@ End of Drug Discovery Session
 © PharmaTech Innovations`;
 
     const element = document.createElement('a');
-    const file = new Blob([content], { type: 'application/msword' });
+    const file = new Blob([fullContent], { type: 'application/msword' });
     element.href = URL.createObjectURL(file);
     element.download = `pharmatech-drugdiscovery-enhanced-${Date.now()}.doc`;
     document.body.appendChild(element);
@@ -786,7 +690,7 @@ End of Drug Discovery Session
     document.body.removeChild(element);
   };
 
-  // Event Handlers
+  // ===== EVENT HANDLERS =====
   const handleKeyPress = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -794,13 +698,13 @@ End of Drug Discovery Session
     }
   };
 
-  // Effects
+  // ===== EFFECTS =====
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
 
   useEffect(() => {
-    // Add CSP meta tag programmatically if it doesn't exist
+    // Add CSP meta tag for image support
     if (!document.querySelector('meta[http-equiv="Content-Security-Policy"]')) {
       const cspMeta = document.createElement('meta');
       cspMeta.setAttribute('http-equiv', 'Content-Security-Policy');
@@ -820,8 +724,6 @@ End of Drug Discovery Session
         overflow-wrap: break-word;
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
         text-rendering: optimizeLegibility;
-        -webkit-font-smoothing: antialiased;
-        -moz-osx-font-smoothing: grayscale;
       }
       
       .research-content h1, .research-content h2 {
@@ -831,7 +733,6 @@ End of Drug Discovery Session
         margin: 20px 0 12px 0;
         border-bottom: 2px solid #e5e7eb;
         padding-bottom: 6px;
-        line-height: 1.3;
       }
       
       .research-content h3 {
@@ -839,7 +740,6 @@ End of Drug Discovery Session
         font-size: 16px;
         font-weight: 600;
         margin: 16px 0 8px 0;
-        line-height: 1.4;
       }
       
       .research-content p {
@@ -878,46 +778,18 @@ End of Drug Discovery Session
         left: -16px;
       }
       
-      .research-content ol {
-        margin: 12px 0;
-        padding-left: 24px;
-        counter-reset: list-counter;
-      }
-      
-      .research-content ol li {
-        margin: 8px 0;
-        line-height: 1.6;
-        counter-increment: list-counter;
-      }
-      
-      .research-content ol li::marker {
-        color: #059669;
-        font-weight: 600;
-      }
-      
       .research-content sub {
         font-size: 0.75em;
-        line-height: 0;
-        position: relative;
         vertical-align: baseline;
         bottom: -0.25em;
+        position: relative;
       }
       
       .research-content sup {
         font-size: 0.75em;
-        line-height: 0;
-        position: relative;
         vertical-align: baseline;
         top: -0.5em;
-      }
-      
-      .research-content code {
-        background-color: #f3f4f6;
-        padding: 2px 4px;
-        border-radius: 3px;
-        font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-        font-size: 0.9em;
-        color: #e11d48;
+        position: relative;
       }
       
       .molecular-structure-display img,
@@ -947,11 +819,12 @@ End of Drug Discovery Session
     document.head.appendChild(style);
     
     return () => {
-      document.head.removeChild(style);
+      if (document.head.contains(style)) {
+        document.head.removeChild(style);
+      }
     };
   }, []);
 
-  // Cooldown timer effect
   useEffect(() => {
     if (cooldownTimeLeft > 0) {
       const timer = setTimeout(() => {
@@ -965,7 +838,7 @@ End of Drug Discovery Session
 
   return (
     <div className="flex flex-col h-screen bg-gray-50">
-      {/* Enhanced Header */}
+      {/* Header */}
       <div className="bg-gradient-to-r from-blue-900 to-blue-800 shadow-lg border-b px-6 py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-4">
@@ -1296,7 +1169,7 @@ const DetailedFeedbackModal = ({ isOpen, messageContent, onClose, onSubmit }) =>
 
   if (!isOpen) return null;
 
-  const hasImages = messageContent.includes('<img') || messageContent.includes('molecular-image-container');
+  const hasImages = messageContent.includes('<img') || messageContent.includes('molecular-structure-display');
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
