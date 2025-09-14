@@ -524,14 +524,61 @@ const MedicalResearchGini = () => {
     if (message.isHTML && message.type === 'bot') {
       const content = message.content;
       
-      // Check for React component marker
+      // Check for React component marker in combined content
       if (content.includes('__MOLECULAR_REACT_COMPONENT__')) {
         const componentMatch = content.match(/__MOLECULAR_REACT_COMPONENT__(.*?)__END_MOLECULAR_REACT_COMPONENT__/);
         if (componentMatch) {
           try {
             const imageData = JSON.parse(componentMatch[1]);
-            logger.image('Rendering React component for molecular structure', { compound: imageData.metadata?.compound });
-            return <MolecularImage imageData={imageData} />;
+            logger.image('Rendering combined content with React component', { compound: imageData.metadata?.compound });
+            
+            // Split content into text part and image part
+            const parts = content.split(/__MOLECULAR_REACT_COMPONENT__.*?__END_MOLECULAR_REACT_COMPONENT__/);
+            const textPart = parts[0] || '';
+            const afterImagePart = parts[1] || '';
+            
+            return (
+              <div>
+                {/* Render text content first */}
+                {textPart && textPart.trim() && (
+                  <div 
+                    className="research-content"
+                    dangerouslySetInnerHTML={{ __html: formatHTMLContent(cleanSpecialCharacters(textPart)) }}
+                    style={{
+                      lineHeight: '1.7',
+                      fontSize: '14px',
+                      color: '#374151',
+                      maxHeight: 'none',
+                      overflow: 'visible',
+                      wordBreak: 'break-word',
+                      width: '100%',
+                      marginBottom: '16px'
+                    }}
+                  />
+                )}
+                
+                {/* Render molecular image component */}
+                <MolecularImage imageData={imageData} />
+                
+                {/* Render any content after the image */}
+                {afterImagePart && afterImagePart.trim() && (
+                  <div 
+                    className="research-content"
+                    dangerouslySetInnerHTML={{ __html: formatHTMLContent(cleanSpecialCharacters(afterImagePart)) }}
+                    style={{
+                      lineHeight: '1.7',
+                      fontSize: '14px',
+                      color: '#374151',
+                      maxHeight: 'none',
+                      overflow: 'visible',
+                      wordBreak: 'break-word',
+                      width: '100%',
+                      marginTop: '16px'
+                    }}
+                  />
+                )}
+              </div>
+            );
           } catch (e) {
             logger.error('Failed to parse React component data', e);
             return (
@@ -544,7 +591,7 @@ const MedicalResearchGini = () => {
         }
       }
       
-      // Regular HTML content
+      // Regular HTML content (no React component)
       const cleanedContent = cleanSpecialCharacters(content);
       const formattedContent = formatHTMLContent(cleanedContent);
       
