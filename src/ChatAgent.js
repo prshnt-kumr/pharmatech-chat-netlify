@@ -1,5 +1,5 @@
 ﻿import React, { useState, useRef, useEffect } from 'react';
-import { Send, Download, FileText, FileSpreadsheet, User, Loader2, ThumbsUp, ThumbsDown, MessageSquare, X, Star, Clock, Image, Beaker, Atom, Eye, EyeOff } from 'lucide-react';
+import { Send, Download, FileText, FileSpreadsheet, User, Loader2, ThumbsUp, ThumbsDown, MessageSquare, X, Star, Clock, Image, Beaker, Atom } from 'lucide-react';
 
 const MedicalResearchGini = () => {
   const [messages, setMessages] = useState([
@@ -12,33 +12,21 @@ const MedicalResearchGini = () => {
   ]);
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [isGeneratingImage, setIsGeneratingImage] = useState(false);
   const [feedbackModal, setFeedbackModal] = useState({ open: false, messageId: null, messageContent: '' });
   const [userFeedback, setUserFeedback] = useState({});
   const [lastRequestTime, setLastRequestTime] = useState(0);
   const [cooldownTimeLeft, setCooldownTimeLeft] = useState(0);
-  const [imageViewMode, setImageViewMode] = useState('inline');
   const messagesEndRef = useRef(null);
 
   // Configuration
-  const XATA_CONFIG = {
-    baseURL: 'https://Prashant-Kumar-s-workspace-9seqfg.us-east-1.xata.sh/db/ZAPAL01GRP01:main',
-    apiKey: process.env.REACT_APP_XATA_API_KEY || 'YOUR_XATA_API_KEY_HERE',
-    headers: {
-      'Authorization': `Bearer ${process.env.REACT_APP_XATA_API_KEY || 'YOUR_XATA_API_KEY_HERE'}`,
-      'Content-Type': 'application/json'
-    }
-  };
-
-  // Enhanced webhook URLs with proper error handling
   const N8N_WEBHOOK_URL = process.env.REACT_APP_N8N_WEBHOOK_URL || 'https://prshntkumrai.app.n8n.cloud/webhook/Chatbot';
   const FEEDBACK_WEBHOOK_URL = 'https://prshntkumrai.app.n8n.cloud/webhook/webhook/Chatbot/feedback';
-  const REQUEST_COOLDOWN = 180000; // 3 minutes in milliseconds
+  const REQUEST_COOLDOWN = 180000; // 3 minutes
 
   // Utility Functions
   const generateSessionId = () => `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   const generateMessageId = (type) => `${type}_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
-  
+
   // Enhanced image detection logic
   const detectImageRequirement = (message) => {
     const imageKeywords = [
@@ -55,10 +43,8 @@ const MedicalResearchGini = () => {
     ];
     
     const lowerMessage = message.toLowerCase();
-    
     const hasImageKeyword = imageKeywords.some(keyword => lowerMessage.includes(keyword));
     const hasMolecularCompound = molecularCompounds.some(compound => lowerMessage.includes(compound));
-    const hasChemicalFormula = /[A-Z][a-z]?\d*([A-Z][a-z]?\d*)*/g.test(message);
     
     return {
       needsImage: hasImageKeyword || (hasMolecularCompound && (hasImageKeyword || lowerMessage.includes('structure'))),
@@ -67,8 +53,7 @@ const MedicalResearchGini = () => {
       confidence: hasImageKeyword ? 'high' : hasMolecularCompound ? 'medium' : 'low'
     };
   };
-  
-  // Extract compound name from message
+
   const extractCompoundName = (message) => {
     const compounds = ['chromene', 'benzene', 'caffeine', 'aspirin', 'penicillin', 'dopamine', 'serotonin'];
     const found = compounds.find(compound => message.toLowerCase().includes(compound));
@@ -81,49 +66,89 @@ const MedicalResearchGini = () => {
     if (!text || typeof text !== 'string') return text;
     
     return text
-      // Remove markdown formatting artifacts
       .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
       .replace(/\*(.*?)\*/g, '<em>$1</em>')
       .replace(/#{1,6}\s+(.*?)(?:\n|$)/g, '<h3>$1</h3>')
-      
-      // Clean bullet points and lists
       .replace(/^[\s]*[-*+]\s+/gm, '• ')
       .replace(/^\s*\d+\.\s+/gm, (match, offset, string) => {
         const lineStart = string.lastIndexOf('\n', offset) + 1;
         const lineNum = string.substring(0, offset).split('\n').length;
         return `${lineNum}. `;
       })
-      
-      // Fix common escape sequences
       .replace(/\\n/g, '<br>')
       .replace(/\\t/g, '&nbsp;&nbsp;&nbsp;&nbsp;')
       .replace(/\\"/g, '"')
       .replace(/\\'/g, "'")
-      
-      // Clean HTML entities
       .replace(/&nbsp;/g, ' ')
       .replace(/&quot;/g, '"')
       .replace(/&apos;/g, "'")
       .replace(/&lt;/g, '<')
       .replace(/&gt;/g, '>')
       .replace(/&amp;/g, '&')
-      
-      // Remove excessive whitespace
       .replace(/\n{3,}/g, '\n\n')
       .replace(/\s{3,}/g, ' ')
       .replace(/^\s+|\s+$/gm, '')
-      
-      // Clean up chemical formulas and subscripts
       .replace(/([A-Z][a-z]?)(\d+)/g, '$1<sub>$2</sub>')
       .replace(/\^(\d+)/g, '<sup>$1</sup>')
-      
       .trim();
   };
 
-  // ENHANCED: Universal Response Processor with N8N array format handling
+  // Enhanced HTML sanitization that preserves base64 images
+  const formatHTMLContent = (htmlString) => {
+    if (!htmlString) return '';
+    
+    return htmlString
+      .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+      .replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi, '')
+      .replace(/javascript:/gi, '')
+      .replace(/on\w+\s*=/gi, '')
+      .replace(/src="data:image\/([^;]+);base64,([^"]+)"/gi, (match, format, data) => {
+        try {
+          if (data && /^[A-Za-z0-9+/]*={0,2}$/.test(data.replace(/\s/g, ''))) {
+            return `src="data:image/${format};base64,${data.replace(/\s/g, '')}"`;
+          }
+        } catch (e) {
+          console.warn('Invalid base64 image data:', e);
+        }
+        return 'src=""';
+      });
+  };
+
+  // Debug function for image display
+  const debugImageDisplay = (htmlContent) => {
+    console.log('=== IMAGE DEBUG ===');
+    console.log('HTML length:', htmlContent.length);
+    console.log('Contains img tag:', htmlContent.includes('<img'));
+    console.log('Contains data:image:', htmlContent.includes('data:image/'));
+    
+    const imgRegex = /<img[^>]*src="data:image\/([^;]+);base64,([^"]*)"[^>]*>/gi;
+    let match;
+    let imageCount = 0;
+    
+    while ((match = imgRegex.exec(htmlContent)) !== null) {
+      imageCount++;
+      const [, format, base64Data] = match;
+      
+      console.log(`Image ${imageCount}:`);
+      console.log('  Format:', format);
+      console.log('  Base64 length:', base64Data.length);
+      console.log('  Base64 preview:', base64Data.substring(0, 50) + '...');
+      
+      try {
+        const isValidBase64 = /^[A-Za-z0-9+/]*={0,2}$/.test(base64Data.replace(/\s/g, ''));
+        console.log('  Valid base64:', isValidBase64);
+      } catch (e) {
+        console.error(`  Image ${imageCount} validation error:`, e);
+      }
+    }
+    
+    console.log('Total images found:', imageCount);
+    console.log('=== END DEBUG ===');
+  };
+
+  // Enhanced response processor
   const processResponse = async (response, originalMessage = '') => {
-    console.log('Universal Response Processor');
-    console.log('Response status:', response.status);
+    console.log('Processing response - Status:', response.status);
     
     const contentType = response.headers.get('content-type') || '';
     console.log('Content-Type:', contentType);
@@ -135,19 +160,16 @@ const MedicalResearchGini = () => {
 
       let finalHtml = '';
 
-      // Process response (enhanced logic for N8N array format)
       if (rawText.includes('<iframe') && rawText.includes('srcdoc=')) {
-        console.log('AUTO-DETECTED: Iframe wrapped HTML (n8n format)');
+        console.log('Processing iframe wrapped HTML');
         
         let iframeMatch = rawText.match(/<iframe[^>]*srcdoc="([^"]*(?:\\"[^"]*)*)"[^>]*>/is);
-        
         if (!iframeMatch) {
           iframeMatch = rawText.match(/<iframe[^>]*srcdoc='([^']*(?:\\'[^']*)*)'[^>]*>/is);
         }
         
         if (iframeMatch && iframeMatch[1]) {
           let extractedContent = iframeMatch[1];
-          
           extractedContent = extractedContent
             .replace(/\\"/g, '"')
             .replace(/\\'/g, "'")
@@ -168,7 +190,7 @@ const MedicalResearchGini = () => {
         }
       }
       else if (rawText.trim().startsWith('{') || rawText.trim().startsWith('[')) {
-        console.log('AUTO-DETECTED: JSON format');
+        console.log('Processing JSON format');
         try {
           const jsonData = JSON.parse(rawText);
           console.log('Parsed JSON structure:', typeof jsonData, Array.isArray(jsonData));
@@ -179,7 +201,6 @@ const MedicalResearchGini = () => {
               const firstItem = jsonData[0];
               console.log('First item keys:', Object.keys(firstItem));
               
-              // FIXED: Handle N8N array format correctly
               finalHtml = firstItem.output || 
                          firstItem.response || 
                          firstItem.content || 
@@ -187,7 +208,7 @@ const MedicalResearchGini = () => {
                          '';
               
               console.log('Extracted content length:', finalHtml.length);
-              console.log('Extracted content preview:', finalHtml.substring(0, 200));
+              console.log('Contains base64 image:', finalHtml.includes('data:image/'));
             }
           } else if (typeof jsonData === 'object') {
             console.log('Processing JSON object with keys:', Object.keys(jsonData));
@@ -202,16 +223,15 @@ const MedicalResearchGini = () => {
           }
         } catch (jsonError) {
           console.log('JSON parsing failed:', jsonError.message);
-          console.log('Treating as plain text instead');
           finalHtml = `<p>${rawText}</p>`;
         }
       }
       else if (rawText.includes('<h2>') || rawText.includes('<h3>') || rawText.includes('<p>') || rawText.includes('<div')) {
-        console.log('AUTO-DETECTED: Direct HTML format');
+        console.log('Processing direct HTML format');
         finalHtml = rawText;
       }
       else {
-        console.log('AUTO-DETECTED: Plain text format');
+        console.log('Processing plain text format');
         const formattedText = rawText.replace(/\n/g, '<br>');
         finalHtml = `<p>${formattedText}</p>`;
       }
@@ -232,7 +252,6 @@ const MedicalResearchGini = () => {
       // Validate final content
       if (!finalHtml || finalHtml.trim().length < 3) {
         console.warn('Final content is too short');
-        console.log('Raw text for debugging:', rawText);
         return `<div style="padding: 12px; background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 6px;">
           <p><strong>Content Processing Issue</strong></p>
           <p>Processed response but content appears empty or too short.</p>
@@ -240,7 +259,7 @@ const MedicalResearchGini = () => {
         </div>`;
       }
 
-      // Enhanced final cleanup
+      // Final cleanup
       const preliminaryClean = finalHtml
         .replace(/^<!DOCTYPE[^>]*>/i, '')
         .replace(/^<html[^>]*>/i, '')
@@ -252,6 +271,11 @@ const MedicalResearchGini = () => {
 
       const cleanedHtml = cleanSpecialCharacters(preliminaryClean);
 
+      // Debug images if present
+      if (cleanedHtml.includes('<img')) {
+        debugImageDisplay(cleanedHtml);
+      }
+
       console.log('FINAL PROCESSED HTML:');
       console.log('   Length:', cleanedHtml.length);
       console.log('   Contains molecular structure:', cleanedHtml.includes('molecular-structure-display'));
@@ -261,15 +285,13 @@ const MedicalResearchGini = () => {
 
     } catch (error) {
       console.error('CRITICAL ERROR in processor:', error);
-      console.error('Error stack:', error.stack);
       return `<div style="color: #dc2626; background: #fef2f2; padding: 12px; border-radius: 6px; border: 1px solid #fecaca;">
         <strong>Response Processing Error</strong><br/>
         ${error.message}
-        <br/><small>Check browser console for details</small>
       </div>`;
     }
   };
-  
+
   const getSessionId = () => {
     let sessionId = localStorage.getItem('dr_gini_session_id');
     if (!sessionId) {
@@ -295,16 +317,6 @@ const MedicalResearchGini = () => {
 
   // Content Processing Functions
   const isHTMLContent = (content) => /<[a-z][\s\S]*>/i.test(content);
-
-  const formatHTMLContent = (htmlString) => {
-    const allowedTags = ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'br', 'strong', 'em', 'ul', 'ol', 'li', 'div', 'span', 'sub', 'sup', 'img'];
-    
-    return htmlString
-      .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-      .replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi, '')
-      .replace(/javascript:/gi, '')
-      .replace(/on\w+\s*=/gi, '');
-  };
 
   const htmlToPlainText = (html) => {
     if (!isHTMLContent(html)) return html;
@@ -333,12 +345,19 @@ const MedicalResearchGini = () => {
   const renderMessageContent = (message) => {
     if (message.isHTML && message.type === 'bot') {
       const cleanedContent = cleanSpecialCharacters(message.content);
+      const formattedContent = formatHTMLContent(cleanedContent);
+      
+      // Debug image content
+      if (formattedContent.includes('<img')) {
+        console.log('Rendering message with images');
+        console.log('Message content preview:', formattedContent.substring(0, 500));
+      }
       
       return (
         <div 
           className="research-content"
           dangerouslySetInnerHTML={{ 
-            __html: formatHTMLContent(cleanedContent) 
+            __html: formattedContent
           }}
           style={{
             lineHeight: '1.7',
@@ -379,7 +398,7 @@ const MedicalResearchGini = () => {
     return true;
   };
 
-  // ENHANCED: Send message function with improved error handling and timeout
+  // Enhanced send message function
   const sendMessage = async () => {
     if (!inputMessage.trim() || isLoading) return;
 
@@ -408,9 +427,9 @@ const MedicalResearchGini = () => {
     const userId = `user_${Date.now()}`;
     const messageId = generateMessageId('user');
 
-    // Detect image requirements for UI indicators only
+    // Detect image requirements
     const imageRequirement = detectImageRequirement(inputMessage);
-    console.log('Image requirement detected (for UI only):', imageRequirement);
+    console.log('Image requirement detected:', imageRequirement);
 
     const userMessage = {
       id: Date.now(),
@@ -439,21 +458,14 @@ const MedicalResearchGini = () => {
       console.log('Sending request to:', N8N_WEBHOOK_URL);
       console.log('Request data:', messageData);
 
-      // FIXED: Add timeout to prevent hanging requests
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 45000); // 45-second timeout
-
       const response = await fetch(N8N_WEBHOOK_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'text/html, application/json, text/plain, */*'
         },
-        body: JSON.stringify(messageData),
-        signal: controller.signal
+        body: JSON.stringify(messageData)
       });
-
-      clearTimeout(timeoutId); // Clear timeout if request completes
 
       console.log('Response received:', {
         status: response.status,
@@ -501,13 +513,8 @@ const MedicalResearchGini = () => {
       
       let errorMessage = 'Sorry, I\'m having trouble processing your request. ';
       
-      // ENHANCED: Better error handling with specific timeout handling
-      if (error.name === 'AbortError') {
-        errorMessage += 'The request timed out after 180 seconds (3 minutes). Please try a shorter query or check your connection.';
-      } else if (error.message.includes('JSON')) {
+      if (error.message.includes('JSON')) {
         errorMessage += 'There was a formatting issue with the response.';
-      } else if (error.message.includes('timeout')) {
-        errorMessage += 'The request timed out. Please try a shorter query.';
       } else if (error.message.includes('404')) {
         errorMessage += 'The AI service is temporarily unavailable.';
       } else if (error.message.includes('500')) {
@@ -819,14 +826,22 @@ End of Drug Discovery Session
         color: #e11d48;
       }
       
-      .molecular-image-container img {
+      .molecular-structure-display img,
+      .research-content img {
+        display: block !important;
+        max-width: 100% !important;
+        height: auto !important;
+        margin: 10px auto !important;
+        border-radius: 6px;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+        background: white;
+        padding: 8px;
         cursor: pointer;
         transition: transform 0.2s ease;
-        max-width: 100%;
-        height: auto;
       }
       
-      .molecular-image-container img:hover {
+      .molecular-structure-display img:hover,
+      .research-content img:hover {
         transform: scale(1.05);
       }
       
@@ -846,6 +861,20 @@ End of Drug Discovery Session
       @keyframes pulse {
         0%, 100% { opacity: 1; }
         50% { opacity: 0.7; }
+      }
+
+      /* Debug styles for broken images */
+      img[src=""], img:not([src]) {
+        display: block !important;
+        width: 200px !important;
+        height: 100px !important;
+        background: #ffe6e6 !important;
+        border: 2px dashed #ff0000 !important;
+        text-align: center;
+        line-height: 100px;
+        color: #ff0000;
+        font-size: 12px;
+        content: "Image failed to load";
       }
     `;
     document.head.appendChild(style);
@@ -869,7 +898,14 @@ End of Drug Discovery Session
 
   return (
     <div className="flex flex-col h-screen bg-gray-50">
-      {/* Enhanced Header with molecular visualization indicator */}
+      {/* Add CSP meta tag */}
+      <style>{`
+        img[src^="data:"] {
+          display: block !important;
+        }
+      `}</style>
+      
+      {/* Enhanced Header */}
       <div className="bg-gradient-to-r from-blue-900 to-blue-800 shadow-lg border-b px-6 py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-4">
@@ -943,13 +979,11 @@ End of Drug Discovery Session
             </div>
           </div>
           
-          {/* Enhanced status indicator */}
-          {(isGeneratingImage || isLoading) && (
+          {/* Status indicator */}
+          {isLoading && (
             <div className="flex items-center space-x-2 text-blue-200">
               <Loader2 className="w-4 h-4 animate-spin" />
-              <span className="text-sm">
-                {isGeneratingImage ? 'Generating Structure...' : 'Processing...'}
-              </span>
+              <span className="text-sm">Processing...</span>
             </div>
           )}
         </div>
@@ -963,7 +997,7 @@ End of Drug Discovery Session
             className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}
           >
             <div className={`flex space-x-3 max-w-4xl ${message.type === 'user' ? 'flex-row-reverse space-x-reverse' : ''}`}>
-              {/* Enhanced Avatar with image indicator */}
+              {/* Avatar */}
               <div className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center relative ${
                 message.type === 'user' 
                   ? 'bg-gradient-to-br from-blue-600 to-blue-700 shadow-md' 
@@ -1069,7 +1103,7 @@ End of Drug Discovery Session
           </div>
         ))}
 
-        {/* Enhanced Loading indicator */}
+        {/* Loading indicator */}
         {isLoading && (
           <div className="flex justify-start">
             <div className="flex space-x-3 max-w-3xl">
@@ -1104,7 +1138,7 @@ End of Drug Discovery Session
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Enhanced Input Area */}
+      {/* Input Area */}
       <div className="bg-white border-t px-6 py-4">
         {/* Download Section */}
         {messages.length > 1 && (
@@ -1151,13 +1185,13 @@ End of Drug Discovery Session
             <div className="flex items-center space-x-2">
               <Clock className="w-4 h-4 text-orange-600" />
               <span className="text-sm text-orange-700">
-                Please wait {formatTimeLeft(cooldownTimeLeft)} before sending another message. This helps ensure optimal response quality.
+                Please wait {formatTimeLeft(cooldownTimeLeft)} before sending another message.
               </span>
             </div>
           </div>
         )}
 
-        {/* Enhanced Message Input with structure examples */}
+        {/* Message Input */}
         <div className="flex space-x-4">
           <div className="flex-1 relative">
             <textarea
@@ -1205,14 +1239,14 @@ End of Drug Discovery Session
           </button>
         </div>
         
-        {/* Enhanced Connection Status */}
+        {/* Connection Status */}
         <div className="mt-2 text-xs text-gray-500 text-center">
           <span>Connected to PharmaTech Discovery Systems</span>
           <span className="mx-2">•</span>
           <span>2D/3D Molecular Visualization Enabled</span>
           <br />
           <span className="text-xs text-gray-400">
-            Session: {getSessionId().split('_')[1]} | MongoDB Memory + Xata Feedback + Structure Generation
+            Session: {getSessionId().split('_')[1]} | Enhanced Image Processing
           </span>
         </div>
       </div>
@@ -1230,7 +1264,7 @@ End of Drug Discovery Session
   );
 };
 
-// Enhanced Detailed Feedback Modal Component
+// Detailed Feedback Modal Component
 const DetailedFeedbackModal = ({ isOpen, messageContent, onClose, onSubmit }) => {
   const [feedback, setFeedback] = useState({
     rating: 0,
