@@ -18,8 +18,9 @@ const MedicalResearchGini = () => {
   const [cooldownTimeLeft, setCooldownTimeLeft] = useState(0);
   const messagesEndRef = useRef(null);
 
-  // Configuration
-  const N8N_WEBHOOK_URL = process.env.REACT_APP_N8N_WEBHOOK_URL || 'https://prshntkumrai.app.n8n.cloud/webhook/Chatbot';
+  // Dual Webhook Configuration
+  const TEXT_WEBHOOK_URL = process.env.REACT_APP_TEXT_WEBHOOK_URL || 'https://prshntkumrai.app.n8n.cloud/webhook/Chatbot_text';
+  const IMAGE_WEBHOOK_URL = process.env.REACT_APP_IMAGE_WEBHOOK_URL || 'https://prshntkumrai.app.n8n.cloud/webhook/Chatbot_image';
   const FEEDBACK_WEBHOOK_URL = 'https://prshntkumrai.app.n8n.cloud/webhook/webhook/Chatbot/feedback';
   const REQUEST_COOLDOWN = 180000; // 3 minutes
 
@@ -39,7 +40,7 @@ const MedicalResearchGini = () => {
     
     const molecularCompounds = [
       'chromene', 'benzene', 'caffeine', 'aspirin', 'penicillin', 
-      'dopamine', 'serotonin', 'acetaminophen', 'ibuprofen'
+      'dopamine', 'serotonin', 'acetaminophen', 'ibuprofen', 'rochelle'
     ];
     
     const lowerMessage = message.toLowerCase();
@@ -55,19 +56,19 @@ const MedicalResearchGini = () => {
   };
 
   const extractCompoundName = (message) => {
-    const compounds = ['chromene', 'benzene', 'caffeine', 'aspirin', 'penicillin', 'dopamine', 'serotonin'];
+    const compounds = ['chromene', 'benzene', 'caffeine', 'aspirin', 'penicillin', 'dopamine', 'serotonin', 'rochelle'];
     const found = compounds.find(compound => message.toLowerCase().includes(compound));
     const formulaMatch = message.match(/([A-Z][a-z]?\d*)+/g);
     return found || (formulaMatch && formulaMatch[0]) || 'unknown';
   };
 
-  // Enhanced text cleaning function
+  // Enhanced text cleaning function that preserves base64 images
   const cleanSpecialCharacters = (text) => {
     if (!text || typeof text !== 'string') return text;
     
     // CRITICAL: Skip processing if text contains base64 images
     if (text.includes('data:image/') && text.includes('base64,')) {
-      console.log('⚠️ Skipping cleanSpecialCharacters - contains base64 images');
+      console.log('Skipping cleanSpecialCharacters - contains base64 images');
       return text
         .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
         .replace(/\*(.*?)\*/g, '<em>$1</em>')
@@ -81,65 +82,52 @@ const MedicalResearchGini = () => {
     }
     
     return text
-      // Basic markdown formatting
       .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
       .replace(/\*(.*?)\*/g, '<em>$1</em>')
       .replace(/#{1,6}\s+(.*?)(?:\n|$)/g, '<h3>$1</h3>')
-      
-      // Clean bullet points and lists
       .replace(/^[\s]*[-*+]\s+/gm, '• ')
       .replace(/^\s*\d+\.\s+/gm, (match, offset, string) => {
         const lineStart = string.lastIndexOf('\n', offset) + 1;
         const lineNum = string.substring(0, offset).split('\n').length;
         return `${lineNum}. `;
       })
-      
-      // Fix escape sequences
       .replace(/\\n/g, '<br>')
       .replace(/\\t/g, '&nbsp;&nbsp;&nbsp;&nbsp;')
       .replace(/\\"/g, '"')
       .replace(/\\'/g, "'")
-      
-      // Clean HTML entities
       .replace(/&nbsp;/g, ' ')
       .replace(/&quot;/g, '"')
       .replace(/&apos;/g, "'")
       .replace(/&lt;/g, '<')
       .replace(/&gt;/g, '>')
       .replace(/&amp;/g, '&')
-      
-      // Remove excessive whitespace
       .replace(/\n{3,}/g, '\n\n')
       .replace(/\s{3,}/g, ' ')
       .replace(/^\s+|\s+$/gm, '')
-      
-      // ONLY format chemical formulas in text content, NOT in base64 data
-      // This was corrupting base64 images
       .replace(/([A-Z][a-z]?)(\d+)/g, '$1<sub>$2</sub>')
       .replace(/\^(\d+)/g, '<sup>$1</sup>')
-      
       .trim();
   };
 
-  // Enhanced HTML sanitization that preserves base64 images
+  // HTML sanitization that preserves base64 images
   const formatHTMLContent = (htmlString) => {
     if (!htmlString) return '';
     
+    console.log('Formatting HTML content, length:', htmlString.length);
+    console.log('Contains img tags:', htmlString.includes('<img'));
+    console.log('Contains base64:', htmlString.includes('data:image/'));
+    
+    // Skip sanitization if we detect base64 images - just return as-is
+    if (htmlString.includes('data:image/png;base64,') || htmlString.includes('data:image/jpeg;base64,')) {
+      console.log('Base64 images detected - skipping sanitization to preserve data');
+      return htmlString;
+    }
+    
+    // Only do minimal sanitization for safety
     return htmlString
       .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-      .replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi, '')
       .replace(/javascript:/gi, '')
-      .replace(/on\w+\s*=/gi, '')
-      .replace(/src="data:image\/([^;]+);base64,([^"]+)"/gi, (match, format, data) => {
-        try {
-          if (data && /^[A-Za-z0-9+/]*={0,2}$/.test(data.replace(/\s/g, ''))) {
-            return `src="data:image/${format};base64,${data.replace(/\s/g, '')}"`;
-          }
-        } catch (e) {
-          console.warn('Invalid base64 image data:', e);
-        }
-        return 'src=""';
-      });
+      .replace(/on\w+\s*=/gi, '');
   };
 
   // Debug function for image display
@@ -188,41 +176,12 @@ const MedicalResearchGini = () => {
 
       let finalHtml = '';
 
-      // Check if response is direct HTML (like your N8n webhook returns)
+      // Check if response is direct HTML or JSON
       if (rawText.includes('<div class="molecular-structure-display"') || 
           rawText.includes('<img') || 
           rawText.includes('<p><strong>')) {
         console.log('Processing direct HTML format from N8n');
         finalHtml = rawText;
-      }
-      else if (rawText.includes('<iframe') && rawText.includes('srcdoc=')) {
-        console.log('Processing iframe wrapped HTML');
-        
-        let iframeMatch = rawText.match(/<iframe[^>]*srcdoc="([^"]*(?:\\"[^"]*)*)"[^>]*>/is);
-        if (!iframeMatch) {
-          iframeMatch = rawText.match(/<iframe[^>]*srcdoc='([^']*(?:\\'[^']*)*)'[^>]*>/is);
-        }
-        
-        if (iframeMatch && iframeMatch[1]) {
-          let extractedContent = iframeMatch[1];
-          extractedContent = extractedContent
-            .replace(/\\"/g, '"')
-            .replace(/\\'/g, "'")
-            .replace(/&quot;/g, '"')
-            .replace(/&#34;/g, '"')
-            .replace(/&apos;/g, "'")
-            .replace(/&#39;/g, "'")
-            .replace(/&lt;/g, '<')
-            .replace(/&#60;/g, '<')
-            .replace(/&gt;/g, '>')
-            .replace(/&#62;/g, '>')
-            .replace(/&nbsp;/g, ' ')
-            .replace(/&#160;/g, ' ')
-            .replace(/&amp;/g, '&')
-            .replace(/&#38;/g, '&');
-          
-          finalHtml = extractedContent;
-        }
       }
       else if (rawText.trim().startsWith('{') || rawText.trim().startsWith('[')) {
         console.log('Processing JSON format');
@@ -236,27 +195,6 @@ const MedicalResearchGini = () => {
               const firstItem = jsonData[0];
               console.log('First item keys:', Object.keys(firstItem));
               
-              // Enhanced: Check for N8n enhanced metadata
-              if (firstItem.frontendHints) {
-                console.log('🎯 Found enhanced N8n response with frontend hints');
-                console.log('Content type:', firstItem.contentType);
-                console.log('Has images:', firstItem.hasImages);
-                console.log('Skip sanitization:', firstItem.frontendHints.skipSanitization);
-                console.log('Image count:', firstItem.imageCount);
-                
-                // Use the metadata to guide processing
-                if (firstItem.frontendHints.skipSanitization) {
-                  console.log('⚠️ Skipping sanitization as requested by N8n metadata');
-                }
-                
-                if (firstItem.imageDetails && firstItem.imageDetails.length > 0) {
-                  console.log('📸 Image details from N8n:');
-                  firstItem.imageDetails.forEach((img, idx) => {
-                    console.log(`  Image ${idx + 1}: ${img.format}, length: ${img.base64Length}, valid: ${img.isValidBase64}`);
-                  });
-                }
-              }
-              
               finalHtml = firstItem.output || 
                          firstItem.response || 
                          firstItem.content || 
@@ -268,14 +206,6 @@ const MedicalResearchGini = () => {
             }
           } else if (typeof jsonData === 'object') {
             console.log('Processing JSON object with keys:', Object.keys(jsonData));
-            
-            // Enhanced: Check for N8n enhanced metadata in object format
-            if (jsonData.frontendHints) {
-              console.log('🎯 Found enhanced N8n response (object format)');
-              console.log('Content type:', jsonData.contentType);
-              console.log('Has images:', jsonData.hasImages);
-            }
-            
             finalHtml = jsonData.output || 
                        jsonData.response || 
                        jsonData.content || 
@@ -324,7 +254,7 @@ const MedicalResearchGini = () => {
         </div>`;
       }
 
-      // Enhanced final cleanup - but preserve base64 images
+      // Enhanced final cleanup - preserve base64 images
       const preliminaryClean = finalHtml
         .replace(/^<!DOCTYPE[^>]*>/i, '')
         .replace(/^<html[^>]*>/i, '')
@@ -334,28 +264,11 @@ const MedicalResearchGini = () => {
         .replace(/<\/body>$/i, '')
         .trim();
 
-      // Use enhanced cleaning that preserves images
       const cleanedHtml = cleanSpecialCharacters(preliminaryClean);
 
       // Debug images if present
       if (cleanedHtml.includes('<img')) {
         debugImageDisplay(cleanedHtml);
-        
-        // Additional check: verify img src attributes
-        const imgMatches = cleanedHtml.match(/<img[^>]*src="[^"]*"[^>]*>/gi);
-        if (imgMatches) {
-          imgMatches.forEach((img, index) => {
-            const srcMatch = img.match(/src="([^"]*)"/);
-            if (srcMatch) {
-              const srcValue = srcMatch[1];
-              console.log(`Image ${index + 1} src type:`, 
-                srcValue.startsWith('data:image/') ? 'Base64 Data URI' : 
-                srcValue.startsWith('http') ? 'HTTP URL' : 
-                srcValue === '' ? 'Empty src' : 'Other');
-              console.log(`Image ${index + 1} src preview:`, srcValue.substring(0, 80) + '...');
-            }
-          });
-        }
       }
 
       console.log('FINAL PROCESSED HTML:');
@@ -424,13 +337,12 @@ const MedicalResearchGini = () => {
       .trim();
   };
 
-  // Enhanced message content renderer with image support
+  // Enhanced message content renderer
   const renderMessageContent = (message) => {
     if (message.isHTML && message.type === 'bot') {
       const cleanedContent = cleanSpecialCharacters(message.content);
       const formattedContent = formatHTMLContent(cleanedContent);
       
-      // Debug image content
       if (formattedContent.includes('<img')) {
         console.log('Rendering message with images');
         console.log('Message content preview:', formattedContent.substring(0, 500));
@@ -481,7 +393,7 @@ const MedicalResearchGini = () => {
     return true;
   };
 
-  // Enhanced send message function
+  // DUAL WEBHOOK SEND MESSAGE FUNCTION
   const sendMessage = async () => {
     if (!inputMessage.trim() || isLoading) return;
 
@@ -508,6 +420,7 @@ const MedicalResearchGini = () => {
 
     const sessionId = getSessionId();
     const userId = `user_${Date.now()}`;
+    const requestId = `request_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
     const messageId = generateMessageId('user');
 
     // Detect image requirements
@@ -529,21 +442,25 @@ const MedicalResearchGini = () => {
     setIsLoading(true);
     setLastRequestTime(Date.now());
 
+    // Create message data for both webhooks
+    const messageData = {
+      message: currentMessage,
+      sessionId: sessionId,
+      userId: userId,
+      messageId: messageId,
+      requestId: requestId,
+      timestamp: new Date().toISOString()
+    };
+
+    console.log('🚀 Starting dual webhook requests...');
+    console.log('📝 Text webhook:', TEXT_WEBHOOK_URL);
+    console.log('🖼️ Image webhook:', IMAGE_WEBHOOK_URL);
+
     try {
-      const messageData = {
-        message: currentMessage,
-        sessionId: sessionId,
-        userId: userId,
-        messageId: messageId,
-        timestamp: new Date().toISOString()
-      };
-
-      console.log('Sending request to:', N8N_WEBHOOK_URL);
-      console.log('Request data:', messageData);
-
-      console.log('Attempting to fetch from URL:', N8N_WEBHOOK_URL);
+      // STEP 1: Always get text response first (should be fast)
+      console.log('📝 Fetching text response...');
       
-      const response = await fetch(N8N_WEBHOOK_URL, {
+      const textResponse = await fetch(TEXT_WEBHOOK_URL, {
         method: 'POST',
         mode: 'cors',
         headers: {
@@ -553,64 +470,141 @@ const MedicalResearchGini = () => {
         },
         body: JSON.stringify(messageData)
       });
-      
-      console.log('Response URL:', response.url);
-      console.log('Response redirected:', response.redirected);
 
-      console.log('Response received:', {
-        status: response.status,
-        statusText: response.statusText,
-        ok: response.ok,
-        type: response.type,
-        url: response.url
+      console.log('📝 Text response received:', {
+        status: textResponse.status,
+        ok: textResponse.ok
       });
 
-      if (!response.ok) {        
-        if (response.status === 500) {
-          throw new Error(`Server error (500): The webhook encountered an internal error. Please check your n8n workflow configuration.`);
-        } else if (response.status === 404) {
-          throw new Error(`Webhook not found (404): Please verify your webhook URL is correct.`);
-        } else if (response.status === 405) {
-          throw new Error(`Method not allowed (405): Please check your webhook accepts POST requests.`);
-        } else {
-          throw new Error(`HTTP error! status: ${response.status} - ${response.statusText}`);
-        }
+      if (!textResponse.ok) {
+        throw new Error(`Text webhook error: ${textResponse.status} - ${textResponse.statusText}`);
       }
 
-      const aiResponse = await processResponse(response, currentMessage);
+      // Process text response immediately
+      const textContent = await processResponse(textResponse, currentMessage);
+      console.log('✅ Text content processed, length:', textContent.length);
 
-      const botMessage = {
-        id: Date.now() + 1,
+      // Create initial bot message with text content
+      const initialBotMessageId = Date.now() + 1;
+      const textBotMessage = {
+        id: initialBotMessageId,
         type: 'bot',
-        content: aiResponse,
+        content: textContent,
         timestamp: new Date(),
         isHTML: true,
         messageId: generateMessageId('gini'),
-        hasImages: aiResponse.includes('<img') || aiResponse.includes('molecular-structure-display')
+        hasImages: false,
+        isPartial: imageRequirement.needsImage, // Indicates more content coming
+        requestId: requestId
       };
 
-      console.log('Creating bot message:', {
-        contentLength: aiResponse.length,
-        isHTML: true,
-        hasImages: botMessage.hasImages,
-        contentPreview: aiResponse.substring(0, 100) + '...'
-      });
+      console.log('📝 Displaying text response immediately');
+      setMessages(prev => [...prev, textBotMessage]);
+      setIsLoading(false); // Stop loading for text content
 
-      setMessages(prev => [...prev, botMessage]);
+      // STEP 2: If image is needed, start image request
+      if (imageRequirement.needsImage) {
+        console.log('🖼️ Starting image request...');
+        
+        // Show image loading indicator
+        const imageLoadingMessage = {
+          id: Date.now() + 2,
+          type: 'bot',
+          content: `<div style="padding: 12px; background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%); border: 2px solid #3b82f6; border-radius: 12px; text-align: center; margin: 10px 0;">
+            <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
+              <div style="width: 16px; height: 16px; border: 2px solid #3b82f6; border-top: 2px solid transparent; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+              <span style="color: #1e40af; font-weight: 600;">Generating molecular structure for ${imageRequirement.compound}...</span>
+            </div>
+            <p style="color: #64748b; font-size: 12px; margin: 8px 0 0 0;">This may take a moment</p>
+          </div>`,
+          timestamp: new Date(),
+          isHTML: true,
+          isImageLoading: true,
+          requestId: requestId
+        };
 
-    } catch (error) {
-      console.error('Error sending message:', error);
+        setMessages(prev => [...prev, imageLoadingMessage]);
+
+        // Fetch image response
+        try {
+          const imageResponse = await fetch(IMAGE_WEBHOOK_URL, {
+            method: 'POST',
+            mode: 'cors',
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json, text/html, text/plain, */*',
+              'Origin': window.location.origin
+            },
+            body: JSON.stringify({
+              ...messageData,
+              compound: imageRequirement.compound
+            })
+          });
+
+          console.log('🖼️ Image response received:', {
+            status: imageResponse.status,
+            ok: imageResponse.ok
+          });
+
+          if (imageResponse.ok) {
+            const imageContent = await processResponse(imageResponse, currentMessage);
+            console.log('✅ Image content processed, length:', imageContent.length);
+
+            // Remove loading message and add final combined message
+            setMessages(prev => {
+              // Remove the image loading message
+              const filteredMessages = prev.filter(msg => msg.requestId !== requestId || !msg.isImageLoading);
+              
+              // Update the original text message to include image content
+              const updatedMessages = filteredMessages.map(msg => 
+                msg.id === initialBotMessageId ? {
+                  ...msg,
+                  content: msg.content + '\n\n' + imageContent,
+                  hasImages: true,
+                  isPartial: false
+                } : msg
+              );
+
+              return updatedMessages;
+            });
+
+            console.log('✅ Combined text + image response displayed');
+          } else {
+            throw new Error(`Image webhook error: ${imageResponse.status}`);
+          }
+        } catch (imageError) {
+          console.error('🖼️ Image request failed:', imageError);
+          
+          // Remove loading message and show error
+          setMessages(prev => {
+            const filteredMessages = prev.filter(msg => msg.requestId !== requestId || !msg.isImageLoading);
+            
+            const errorMessage = {
+              id: Date.now() + 3,
+              type: 'bot',
+              content: `<div style="padding: 12px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 6px; color: #dc2626;">
+                <strong>Molecular Structure Unavailable</strong><br/>
+                <p style="margin: 8px 0 0 0; font-size: 14px;">Unable to generate molecular structure at this time. The text information above is still accurate.</p>
+              </div>`,
+              timestamp: new Date(),
+              isHTML: true,
+              isImageError: true
+            };
+
+            return [...filteredMessages, errorMessage];
+          });
+        }
+      }
+
+    } catch (textError) {
+      console.error('📝 Text request failed:', textError);
       
       let errorMessage = 'Sorry, I\'m having trouble processing your request. ';
       
-      if (error.message.includes('JSON')) {
-        errorMessage += 'There was a formatting issue with the response.';
-      } else if (error.message.includes('404')) {
-        errorMessage += 'The AI service is temporarily unavailable.';
-      } else if (error.message.includes('500')) {
+      if (textError.message.includes('404')) {
+        errorMessage += 'The text service is temporarily unavailable.';
+      } else if (textError.message.includes('500')) {
         errorMessage += 'There was a server error. Please try again.';
-      } else if (error.message.includes('CORS')) {
-        errorMessage += 'There was a connection issue. Please verify your webhook configuration.';
       } else {
         errorMessage += 'Please check your connection and try again.';
       }
@@ -805,6 +799,15 @@ End of Drug Discovery Session
   }, [messages]);
 
   useEffect(() => {
+    // Add CSP meta tag programmatically if it doesn't exist
+    if (!document.querySelector('meta[http-equiv="Content-Security-Policy"]')) {
+      const cspMeta = document.createElement('meta');
+      cspMeta.setAttribute('http-equiv', 'Content-Security-Policy');
+      cspMeta.setAttribute('content', 'img-src \'self\' data: blob: https:; script-src \'self\' \'unsafe-inline\';');
+      document.head.appendChild(cspMeta);
+      console.log('CSP meta tag added for image support');
+    }
+
     const style = document.createElement('style');
     style.textContent = `
       .research-content {
@@ -935,36 +938,9 @@ End of Drug Discovery Session
         transform: scale(1.05);
       }
       
-      .loading-spinner {
-        animation: spin 1s linear infinite;
-      }
-      
       @keyframes spin {
         from { transform: rotate(0deg); }
         to { transform: rotate(360deg); }
-      }
-      
-      .image-generation-status {
-        animation: pulse 2s ease-in-out infinite;
-      }
-      
-      @keyframes pulse {
-        0%, 100% { opacity: 1; }
-        50% { opacity: 0.7; }
-      }
-
-      /* Debug styles for broken images */
-      img[src=""], img:not([src]) {
-        display: block !important;
-        width: 200px !important;
-        height: 100px !important;
-        background: #ffe6e6 !important;
-        border: 2px dashed #ff0000 !important;
-        text-align: center;
-        line-height: 100px;
-        color: #ff0000;
-        font-size: 12px;
-        content: "Image failed to load";
       }
     `;
     document.head.appendChild(style);
@@ -988,13 +964,6 @@ End of Drug Discovery Session
 
   return (
     <div className="flex flex-col h-screen bg-gray-50">
-      {/* Add CSP meta tag */}
-      <style>{`
-        img[src^="data:"] {
-          display: block !important;
-        }
-      `}</style>
-      
       {/* Enhanced Header */}
       <div className="bg-gradient-to-r from-blue-900 to-blue-800 shadow-lg border-b px-6 py-4">
         <div className="flex items-center justify-between">
@@ -1006,70 +975,31 @@ End of Drug Discovery Session
                   <stop offset="50%" stopColor="#5b21b6" />
                   <stop offset="100%" stopColor="#4c1d95" />
                 </linearGradient>
-                <linearGradient id="moleculeGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stopColor="#06b6d4" />
-                  <stop offset="100%" stopColor="#0891b2" />
-                </linearGradient>
-                <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
-                  <feDropShadow dx="2" dy="2" stdDeviation="3" floodColor="#5b21b6" floodOpacity="0.3"/>
-                </filter>
               </defs>
-              
-              <circle cx="60" cy="60" r="56" fill="url(#logoGradient)" filter="url(#shadow)" />
+              <circle cx="60" cy="60" r="56" fill="url(#logoGradient)" />
               <circle cx="60" cy="60" r="50" fill="white" />
-              
               <g stroke="#5b21b6" strokeWidth="2" fill="none">
-                <polygon points="60,30 75,40 75,60 60,70 45,60 45,40" stroke="#5b21b6" strokeWidth="2" fill="none" />
-                <line x1="75" y1="40" x2="90" y2="35" strokeLinecap="round" />
-                <line x1="75" y1="60" x2="90" y2="65" strokeLinecap="round" />
-                <line x1="45" y1="40" x2="30" y2="35" strokeLinecap="round" />
-                <line x1="45" y1="60" x2="30" y2="65" strokeLinecap="round" />
+                <polygon points="60,30 75,40 75,60 60,70 45,60 45,40" />
               </g>
-              
-              <circle cx="60" cy="30" r="4" fill="#ef4444" stroke="#dc2626" strokeWidth="1" />
-              <circle cx="75" cy="40" r="3" fill="#3b82f6" stroke="#2563eb" strokeWidth="1" />
-              <circle cx="75" cy="60" r="3" fill="#10b981" stroke="#059669" strokeWidth="1" />
-              <circle cx="60" cy="70" r="4" fill="#f59e0b" stroke="#d97706" strokeWidth="1" />
-              <circle cx="45" cy="60" r="3" fill="#8b5cf6" stroke="#7c3aed" strokeWidth="1" />
-              <circle cx="45" cy="40" r="3" fill="#ec4899" stroke="#db2777" strokeWidth="1" />
-              
-              <circle cx="90" cy="35" r="2.5" fill="#06b6d4" stroke="#0891b2" strokeWidth="1" />
-              <circle cx="90" cy="65" r="2.5" fill="#84cc16" stroke="#65a30d" strokeWidth="1" />
-              <circle cx="30" cy="35" r="2.5" fill="#f97316" stroke="#ea580c" strokeWidth="1" />
-              <circle cx="30" cy="65" r="2.5" fill="#6366f1" stroke="#4f46e5" strokeWidth="1" />
-              
-              <g stroke="url(#moleculeGradient)" strokeWidth="1.5" fill="none" opacity="0.6">
-                <circle cx="60" cy="60" r="25" strokeDasharray="3,3">
-                  <animateTransform
-                    attributeName="transform"
-                    attributeType="XML"
-                    type="rotate"
-                    from="0 60 60"
-                    to="360 60 60"
-                    dur="8s"
-                    repeatCount="indefinite"/>
-                </circle>
-              </g>
-              
-              <text x="60" y="95" fontFamily="Arial, sans-serif" fontSize="14" fontWeight="bold" textAnchor="middle" fill="#5b21b6">PT</text>
-              <text x="60" y="108" fontFamily="Arial, sans-serif" fontSize="6" fontWeight="bold" textAnchor="middle" fill="#5b21b6" opacity="0.8">INNOVATIONS</text>
-              
-              <circle cx="60" cy="60" r="50" fill="none" stroke="rgba(123, 58, 237, 0.3)" strokeWidth="2" />
+              <circle cx="60" cy="30" r="4" fill="#ef4444" />
+              <circle cx="75" cy="40" r="3" fill="#3b82f6" />
+              <circle cx="75" cy="60" r="3" fill="#10b981" />
+              <circle cx="60" cy="70" r="4" fill="#f59e0b" />
+              <circle cx="45" cy="60" r="3" fill="#8b5cf6" />
+              <circle cx="45" cy="40" r="3" fill="#ec4899" />
             </svg>
             <div>
               <h1 className="text-xl font-bold text-white">DrugDiscovery AI Enhanced</h1>
-              <p className="text-sm text-blue-100">PharmaTech Innovations • Accelerating Early-Stage Drug Discovery</p>
-              <p className="text-xs text-blue-200 mt-1">"From Molecules to Medicine: AI-Powered Discovery Pipeline"</p>
+              <p className="text-sm text-blue-100">PharmaTech Innovations • Dual Webhook Architecture</p>
               <div className="flex items-center space-x-2 mt-1">
                 <Beaker className="w-3 h-3 text-blue-300" />
-                <span className="text-xs text-blue-300">2D/3D Molecular Visualization</span>
+                <span className="text-xs text-blue-300">Progressive Loading</span>
                 <Atom className="w-3 h-3 text-blue-300" />
-                <span className="text-xs text-blue-300">Structure Generation</span>
+                <span className="text-xs text-blue-300">Molecular Structures</span>
               </div>
             </div>
           </div>
           
-          {/* Status indicator */}
           {isLoading && (
             <div className="flex items-center space-x-2 text-blue-200">
               <Loader2 className="w-4 h-4 animate-spin" />
@@ -1107,12 +1037,7 @@ End of Drug Discovery Session
                 ) : (
                   <>
                     <div className="w-6 h-6 bg-white rounded-full flex items-center justify-center">
-                      <svg width="16" height="16" viewBox="0 0 24 24" className="w-4 h-4">
-                        <path d="M19 8c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm0-3c-.55 0-1 .45-1 1s.45 1 1 1 1-.45 1-1-.45-1-1-1z" fill="#1e40af"/>
-                        <path d="M16 4.5c0-.28-.22-.5-.5-.5s-.5.22-.5.5V11c0 2.76-2.24 5-5 5s-5-2.24-5-5V4.5c0-.28-.22-.5-.5-.5S4 4.22 4 4.5V11c0 3.31 2.69 6 6 6s6-2.69 6-6V4.5z" fill="#1e40af"/>
-                        <circle cx="7" cy="4" r="2" fill="#10b981"/>
-                        <circle cx="13" cy="4" r="2" fill="#10b981"/>
-                      </svg>
+                      <Beaker className="w-4 h-4 text-blue-600" />
                     </div>
                     {message.hasImages && (
                       <div className="absolute -top-1 -right-1 w-4 h-4 bg-purple-500 rounded-full flex items-center justify-center">
@@ -1136,7 +1061,7 @@ End of Drug Discovery Session
                 </div>
 
                 {/* Feedback Section */}
-                {message.type === 'bot' && !message.isError && message.messageId && (
+                {message.type === 'bot' && !message.isError && !message.isImageLoading && message.messageId && (
                   <div className="flex items-center space-x-2 mt-2">
                     <div className="flex items-center space-x-1">
                       <button
@@ -1170,7 +1095,6 @@ End of Drug Discovery Session
                           ? 'bg-blue-100 text-blue-600'
                           : 'hover:bg-gray-100 text-gray-500'
                       }`}
-                      title="Provide detailed feedback"
                     >
                       <MessageSquare className="w-3 h-3" />
                       <span>Feedback</span>
@@ -1198,26 +1122,12 @@ End of Drug Discovery Session
           <div className="flex justify-start">
             <div className="flex space-x-3 max-w-3xl">
               <div className="flex-shrink-0 w-10 h-10 rounded-full bg-gradient-to-br from-green-600 to-emerald-700 shadow-md border-2 border-white flex items-center justify-center">
-                <div className="w-6 h-6 bg-white rounded-full flex items-center justify-center">
-                  <svg width="16" height="16" viewBox="0 0 24 24" className="w-4 h-4">
-                    <path d="M19 8c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm0-3c-.55 0-1 .45-1 1s.45 1 1 1 1-.45 1-1-.45-1-1-1z" fill="#1e40af"/>
-                    <path d="M16 4.5c0-.28-.22-.5-.5-.5s-.5.22-.5.5V11c0 2.76-2.24 5-5 5s-5-2.24-5-5V4.5c0-.28-.22-.5-.5-.5S4 4.22 4 4.5V11c0 3.31 2.69 6 6 6s6-2.69 6-6V4.5z" fill="#1e40af"/>
-                    <circle cx="7" cy="4" r="2" fill="#10b981"/>
-                    <circle cx="13" cy="4" r="2" fill="#10b981"/>
-                  </svg>
-                </div>
+                <Loader2 className="w-5 h-5 text-white animate-spin" />
               </div>
               <div className="flex flex-col items-start">
                 <div className="px-4 py-3 rounded-lg bg-white border border-gray-200 shadow-sm">
                   <div className="flex items-center space-x-2">
-                    <Loader2 className="w-4 h-4 animate-spin text-emerald-600" />
-                    <span className="text-gray-600">
-                      Dr. Gini is processing your request...
-                    </span>
-                  </div>
-                  <div className="mt-2 text-xs text-gray-500 flex items-center space-x-1">
-                    <Beaker className="w-3 h-3" />
-                    <span>Including molecular structures if requested</span>
+                    <span className="text-gray-600">Dr. Gini is processing your request...</span>
                   </div>
                 </div>
               </div>
@@ -1288,7 +1198,7 @@ End of Drug Discovery Session
               value={inputMessage}
               onChange={(e) => setInputMessage(e.target.value)}
               onKeyPress={handleKeyPress}
-              placeholder="Ask me about drug targets, molecular structures, 2D/3D visualizations, compound optimization, ADMET properties, clinical trials, or any drug discovery questions... Try: 'Show me the structure of chromene' or 'Generate 3D visualization of caffeine'"
+              placeholder="Ask me about drug targets, molecular structures, 2D/3D visualizations, compound optimization... Try: 'Show me the structure of caffeine' or 'Explain aspirin and show its molecular structure'"
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
               rows="1"
               style={{ minHeight: '50px', maxHeight: '120px' }}
@@ -1298,7 +1208,7 @@ End of Drug Discovery Session
             {/* Quick structure buttons */}
             <div className="absolute bottom-2 right-2 flex space-x-1">
               <button
-                onClick={() => setInputMessage('Show me the 2D structure of chromene')}
+                onClick={() => setInputMessage('Show me the 2D structure of caffeine')}
                 className="px-2 py-1 text-xs bg-blue-100 text-blue-600 rounded hover:bg-blue-200 transition-colors"
                 disabled={isLoading}
                 title="Quick: 2D Structure"
@@ -1306,12 +1216,12 @@ End of Drug Discovery Session
                 2D
               </button>
               <button
-                onClick={() => setInputMessage('Generate 3D visualization of benzene')}
+                onClick={() => setInputMessage('Explain aspirin and show its molecular structure')}
                 className="px-2 py-1 text-xs bg-purple-100 text-purple-600 rounded hover:bg-purple-200 transition-colors"
                 disabled={isLoading}
-                title="Quick: 3D Structure"
+                title="Quick: Mixed Content"
               >
-                3D
+                Text+3D
               </button>
             </div>
           </div>
@@ -1329,7 +1239,7 @@ End of Drug Discovery Session
           </button>
         </div>
         
-        {/* Enhanced Connection Status */}
+        {/* Connection Status */}
         <div className="mt-2 text-xs text-gray-500 text-center">
           <span>Connected to PharmaTech Discovery Systems</span>
           <span className="mx-2">•</span>
@@ -1393,10 +1303,7 @@ const DetailedFeedbackModal = ({ isOpen, messageContent, onClose, onSubmit }) =>
         <div className="p-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-semibold text-gray-900">Provide Detailed Feedback</h2>
-            <button
-              onClick={onClose}
-              className="text-gray-400 hover:text-gray-600"
-            >
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
               <X className="w-6 h-6" />
             </button>
           </div>
@@ -1421,18 +1328,14 @@ const DetailedFeedbackModal = ({ isOpen, messageContent, onClose, onSubmit }) =>
 
           <div className="space-y-6">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Overall Rating
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Overall Rating</label>
               <div className="flex items-center space-x-1">
                 {[1, 2, 3, 4, 5].map((star) => (
                   <button
                     key={star}
                     type="button"
                     onClick={() => handleStarClick('rating', star)}
-                    className={`p-1 ${
-                      star <= feedback.rating ? 'text-yellow-400' : 'text-gray-300'
-                    }`}
+                    className={`p-1 ${star <= feedback.rating ? 'text-yellow-400' : 'text-gray-300'}`}
                   >
                     <Star className="w-6 h-6 fill-current" />
                   </button>
@@ -1441,18 +1344,14 @@ const DetailedFeedbackModal = ({ isOpen, messageContent, onClose, onSubmit }) =>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Research Accuracy
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Research Accuracy</label>
               <div className="flex items-center space-x-1">
                 {[1, 2, 3, 4, 5].map((star) => (
                   <button
                     key={star}
                     type="button"
                     onClick={() => handleStarClick('accuracyRating', star)}
-                    className={`p-1 ${
-                      star <= feedback.accuracyRating ? 'text-blue-400' : 'text-gray-300'
-                    }`}
+                    className={`p-1 ${star <= feedback.accuracyRating ? 'text-blue-400' : 'text-gray-300'}`}
                   >
                     <Star className="w-5 h-5 fill-current" />
                   </button>
@@ -1461,18 +1360,14 @@ const DetailedFeedbackModal = ({ isOpen, messageContent, onClose, onSubmit }) =>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Helpfulness
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Helpfulness</label>
               <div className="flex items-center space-x-1">
                 {[1, 2, 3, 4, 5].map((star) => (
                   <button
                     key={star}
                     type="button"
                     onClick={() => handleStarClick('helpfulnessRating', star)}
-                    className={`p-1 ${
-                      star <= feedback.helpfulnessRating ? 'text-green-400' : 'text-gray-300'
-                    }`}
+                    className={`p-1 ${star <= feedback.helpfulnessRating ? 'text-green-400' : 'text-gray-300'}`}
                   >
                     <Star className="w-5 h-5 fill-current" />
                   </button>
@@ -1482,18 +1377,14 @@ const DetailedFeedbackModal = ({ isOpen, messageContent, onClose, onSubmit }) =>
 
             {hasImages && (
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Molecular Structure Quality
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Molecular Structure Quality</label>
                 <div className="flex items-center space-x-1">
                   {[1, 2, 3, 4, 5].map((star) => (
                     <button
                       key={star}
                       type="button"
                       onClick={() => handleStarClick('visualQuality', star)}
-                      className={`p-1 ${
-                        star <= feedback.visualQuality ? 'text-purple-400' : 'text-gray-300'
-                      }`}
+                      className={`p-1 ${star <= feedback.visualQuality ? 'text-purple-400' : 'text-gray-300'}`}
                     >
                       <Star className="w-5 h-5 fill-current" />
                     </button>
@@ -1503,9 +1394,7 @@ const DetailedFeedbackModal = ({ isOpen, messageContent, onClose, onSubmit }) =>
             )}
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Your Research Background
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Your Research Background</label>
               <select
                 value={feedback.userExpertise}
                 onChange={(e) => setFeedback(prev => ({ ...prev, userExpertise: e.target.value }))}
@@ -1519,26 +1408,22 @@ const DetailedFeedbackModal = ({ isOpen, messageContent, onClose, onSubmit }) =>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Additional Comments
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Additional Comments</label>
               <textarea
                 value={feedback.comment}
                 onChange={(e) => setFeedback(prev => ({ ...prev, comment: e.target.value }))}
-                placeholder="What did you think about this response? Was it helpful for your research? How were the molecular structures?"
+                placeholder="What did you think about this response? How were the molecular structures?"
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 rows="3"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Suggestions for Improvement
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Suggestions for Improvement</label>
               <textarea
                 value={feedback.improvementSuggestions}
                 onChange={(e) => setFeedback(prev => ({ ...prev, improvementSuggestions: e.target.value }))}
-                placeholder="How could Dr. Gini improve this type of response? What information was missing? How could the molecular visualizations be better?"
+                placeholder="How could Dr. Gini improve? What information was missing?"
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 rows="3"
               />
@@ -1547,13 +1432,13 @@ const DetailedFeedbackModal = ({ isOpen, messageContent, onClose, onSubmit }) =>
             <div className="flex space-x-3 pt-4">
               <button
                 onClick={handleSubmit}
-                className="flex-1 bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="flex-1 bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700"
               >
                 Submit Feedback
               </button>
               <button
                 onClick={onClose}
-                className="px-6 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500"
+                className="px-6 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50"
               >
                 Cancel
               </button>
