@@ -1,6 +1,177 @@
 ﻿import React, { useState, useRef, useEffect } from 'react';
 import { Send, Download, FileText, FileSpreadsheet, User, Loader2, ThumbsUp, ThumbsDown, MessageSquare, X, Star, Clock, Image, Beaker, Atom } from 'lucide-react';
 
+// Molecular Structure React Component
+const MolecularImage = ({ imageData }) => {
+  const [imageStatus, setImageStatus] = useState('loading');
+  const [error, setError] = useState(null);
+
+  if (!imageData || !imageData.image_url) {
+    return null;
+  }
+
+  const { image_url, metadata = {}, size } = imageData;
+
+  return (
+    <div style={{
+      background: 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)',
+      border: '2px solid #3b82f6',
+      borderRadius: '12px',
+      padding: '20px',
+      margin: '20px 0',
+      textAlign: 'center',
+      boxShadow: '0 4px 12px rgba(59, 130, 246, 0.15)'
+    }}>
+      <div style={{
+        background: 'white',
+        borderRadius: '8px',
+        padding: '16px',
+        marginBottom: '12px',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+      }}>
+        <h3 style={{
+          color: '#1e40af',
+          margin: '0 0 12px 0',
+          fontSize: '18px',
+          fontWeight: '700',
+          textTransform: 'uppercase',
+          letterSpacing: '0.5px'
+        }}>
+          🧬 {metadata.compound || 'Unknown Compound'} - Molecular Structure
+        </h3>
+        
+        <div style={{ textAlign: 'center', padding: '10px', position: 'relative', minHeight: '200px' }}>
+          {imageStatus === 'loading' && (
+            <div style={{
+              position: 'absolute',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+              padding: '20px',
+              background: '#f0f9ff',
+              border: '1px solid #0ea5e9',
+              borderRadius: '6px',
+              color: '#0369a1'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div style={{
+                  width: '16px',
+                  height: '16px',
+                  border: '2px solid #0ea5e9',
+                  borderTop: '2px solid transparent',
+                  borderRadius: '50%',
+                  animation: 'spin 1s linear infinite'
+                }}></div>
+                Loading molecular structure...
+              </div>
+            </div>
+          )}
+          
+          {imageStatus === 'error' && (
+            <div style={{
+              padding: '20px',
+              background: '#fef2f2',
+              border: '1px solid #fecaca',
+              borderRadius: '6px',
+              color: '#dc2626'
+            }}>
+              <strong>Image Display Error</strong><br/>
+              <p style={{ margin: '8px 0', fontSize: '14px' }}>
+                Unable to display molecular structure for {metadata.compound}
+              </p>
+              <p style={{ margin: '4px 0', fontSize: '12px', color: '#666' }}>
+                Image data: {image_url.length} characters
+              </p>
+              {error && (
+                <p style={{ margin: '4px 0', fontSize: '11px', color: '#999' }}>
+                  Error: {error.toString()}
+                </p>
+              )}
+              <button
+                onClick={() => {
+                  setImageStatus('loading');
+                  setError(null);
+                  // Force retry by creating new image element
+                  const img = new Image();
+                  img.onload = () => setImageStatus('loaded');
+                  img.onerror = (e) => {
+                    setImageStatus('error');
+                    setError('Retry failed');
+                  };
+                  img.src = image_url;
+                }}
+                style={{
+                  background: '#3b82f6',
+                  color: 'white',
+                  border: 'none',
+                  padding: '8px 16px',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  marginTop: '8px'
+                }}
+              >
+                Retry Loading
+              </button>
+            </div>
+          )}
+          
+          <img
+            src={image_url}
+            alt={metadata.compound || 'Molecular structure'}
+            style={{
+              maxWidth: '100%',
+              height: 'auto',
+              borderRadius: '6px',
+              boxShadow: '0 2px 6px rgba(0,0,0,0.1)',
+              display: imageStatus === 'loaded' ? 'block' : 'none',
+              margin: '0 auto',
+              background: 'white',
+              padding: '8px',
+              cursor: 'pointer',
+              transition: 'transform 0.2s ease'
+            }}
+            onLoad={() => {
+              console.log('✅ React image loaded successfully:', metadata.compound);
+              setImageStatus('loaded');
+              setError(null);
+            }}
+            onError={(e) => {
+              console.error('❌ React image failed to load:', metadata.compound, e);
+              setImageStatus('error');
+              setError(e.target.error || 'Image load failed');
+            }}
+            onClick={() => {
+              // Optional: Open image in new tab on click
+              const newWindow = window.open();
+              newWindow.document.write(`<img src="${image_url}" style="max-width: 100%; height: auto;" />`);
+            }}
+          />
+        </div>
+      </div>
+      
+      <div style={{
+        background: '#eff6ff',
+        borderRadius: '6px',
+        padding: '12px'
+      }}>
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+          gap: '8px',
+          textAlign: 'left',
+          fontSize: '13px'
+        }}>
+          <div><strong style={{ color: '#1e40af' }}>Compound:</strong> <span style={{ color: '#374151' }}>{metadata.compound || 'N/A'}</span></div>
+          {metadata.cid && <div><strong style={{ color: '#1e40af' }}>PubChem CID:</strong> <span style={{ color: '#374151' }}>{metadata.cid}</span></div>}
+          {metadata.inchikey && <div><strong style={{ color: '#1e40af' }}>InChIKey:</strong> <span style={{ color: '#374151', fontFamily: 'monospace', fontSize: '11px' }}>{metadata.inchikey}</span></div>}
+          <div><strong style={{ color: '#1e40af' }}>Source:</strong> <span style={{ color: '#374151' }}>{metadata.source || 'Generated'}</span></div>
+          {size && <div><strong style={{ color: '#1e40af' }}>Image Size:</strong> <span style={{ color: '#374151' }}>{size} bytes</span></div>}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const MedicalResearchGini = () => {
   const [messages, setMessages] = useState([
     {
@@ -160,7 +331,7 @@ const MedicalResearchGini = () => {
       .replace(/on\w+\s*=/gi, '');
   };
 
-  // Enhanced Response Processor with Better Error Handling
+  // Enhanced Response Processor with React Component Support
   const processResponse = async (response, isImageWebhook = false) => {
     const webhookType = isImageWebhook ? 'IMAGE' : 'TEXT';
     logger.info(`Processing ${webhookType} response`, { status: response.status, url: response.url });
@@ -181,52 +352,18 @@ const MedicalResearchGini = () => {
             const firstItem = jsonData[0];
             
             if (isImageWebhook) {
-              // Handle image webhook response with enhanced validation
+              // Handle image webhook response - Return React component marker
               if (firstItem.success && firstItem.image_url) {
-                logger.image('Processing successful image response');
+                logger.image('Processing successful image response for React component');
                 
                 if (!validateImageData(firstItem.image_url)) {
                   throw new Error('Invalid image data format');
                 }
 
-                const metadata = firstItem.metadata || {};
+                // Return React component marker instead of HTML
+                finalHtml = `__MOLECULAR_REACT_COMPONENT__${JSON.stringify(firstItem)}__END_MOLECULAR_REACT_COMPONENT__`;
                 
-                finalHtml = `
-                  <div class="molecular-structure-display" style="background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%); border: 2px solid #3b82f6; border-radius: 12px; padding: 20px; margin: 20px 0; text-align: center; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);">
-                    <div style="background: white; border-radius: 8px; padding: 16px; margin-bottom: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
-                      <h3 style="color: #1e40af; margin: 0 0 12px 0; font-size: 18px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">
-                        🧬 ${metadata.compound || 'Unknown Compound'} - Molecular Structure
-                      </h3>
-                      <div style="position: relative; display: inline-block;">
-                        <img 
-                          src="${firstItem.image_url}" 
-                          alt="${metadata.compound || 'Molecular structure'}" 
-                          style="max-width: 100%; height: auto; border-radius: 6px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); display: block; margin: 0 auto;" 
-                          onload="console.log('✅ Image loaded successfully:', '${metadata.compound || 'Unknown'}')"
-                          onerror="console.error('❌ Image failed to load for:', '${metadata.compound || 'Unknown'}'); this.style.display='none'; this.nextElementSibling.style.display='block';"
-                        />
-                        <div style="display: none; padding: 20px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 6px; color: #dc2626;">
-                          <strong>Image Display Error</strong><br/>
-                          <p style="margin: 8px 0 0 0; font-size: 12px;">The molecular structure could not be displayed. Image data length: ${firstItem.image_url.length} characters</p>
-                          <details style="margin-top: 8px;">
-                            <summary style="cursor: pointer; font-size: 11px;">Debug Info</summary>
-                            <pre style="font-size: 10px; margin: 4px 0; word-break: break-all;">${firstItem.image_url.substring(0, 100)}...</pre>
-                          </details>
-                        </div>
-                      </div>
-                    </div>
-                    <div style="background: #eff6ff; border-radius: 6px; padding: 12px;">
-                      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; text-align: left; font-size: 13px;">
-                        <div><strong style="color: #1e40af;">Compound:</strong> <span style="color: #374151;">${metadata.compound || 'N/A'}</span></div>
-                        ${metadata.cid ? `<div><strong style="color: #1e40af;">PubChem CID:</strong> <span style="color: #374151;">${metadata.cid}</span></div>` : ''}
-                        ${metadata.inchikey ? `<div><strong style="color: #1e40af;">InChIKey:</strong> <span style="color: #374151; font-family: monospace; font-size: 11px;">${metadata.inchikey}</span></div>` : ''}
-                        <div><strong style="color: #1e40af;">Source:</strong> <span style="color: #374151;">${metadata.source || 'Generated'}</span></div>
-                        ${firstItem.size ? `<div><strong style="color: #1e40af;">Image Size:</strong> <span style="color: #374151;">${firstItem.size} bytes</span></div>` : ''}
-                      </div>
-                    </div>
-                  </div>`;
-                
-                logger.image('Image HTML generated successfully', { compound: metadata.compound, size: firstItem.size });
+                logger.image('React component marker generated', { compound: firstItem.metadata?.compound, size: firstItem.size });
               } else {
                 logger.error('Image webhook returned unsuccessful response', firstItem);
                 finalHtml = `<div style="padding: 12px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 6px; color: #dc2626;">
@@ -251,23 +388,9 @@ const MedicalResearchGini = () => {
                   throw new Error('Invalid image data format in object response');
                 }
 
-                const metadata = jsonData.metadata || {};
-                finalHtml = `
-                  <div class="molecular-structure-display" style="background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%); border: 2px solid #3b82f6; border-radius: 12px; padding: 20px; margin: 20px 0; text-align: center; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);">
-                    <div style="background: white; border-radius: 8px; padding: 16px; margin-bottom: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
-                      <h3 style="color: #1e40af; margin: 0 0 12px 0; font-size: 18px; font-weight: 700;">
-                        🧬 ${metadata.compound || 'Unknown Compound'} - Molecular Structure
-                      </h3>
-                      <img 
-                        src="${jsonData.image_url}" 
-                        alt="${metadata.compound || 'Molecular structure'}" 
-                        style="max-width: 100%; height: auto; border-radius: 6px; box-shadow: 0 2px 6px rgba(0,0,0,0.1);"
-                        onload="console.log('✅ Object format image loaded successfully')"
-                        onerror="console.error('❌ Object format image failed to load')"
-                      />
-                    </div>
-                  </div>`;
-                logger.image('Object format image processed successfully');
+                // Return React component marker for object format
+                finalHtml = `__MOLECULAR_REACT_COMPONENT__${JSON.stringify(jsonData)}__END_MOLECULAR_REACT_COMPONENT__`;
+                logger.image('Object format React component marker generated');
               }
             } else {
               finalHtml = jsonData.output || 
@@ -292,8 +415,8 @@ const MedicalResearchGini = () => {
         logger.debug('Plain text content converted to HTML');
       }
 
-      // Process escaped characters
-      if (typeof finalHtml === 'string' && finalHtml.includes('\\')) {
+      // Process escaped characters (but not for React component markers)
+      if (typeof finalHtml === 'string' && finalHtml.includes('\\') && !finalHtml.includes('__MOLECULAR_REACT_COMPONENT__')) {
         finalHtml = finalHtml
           .replace(/\\n/g, '<br>')
           .replace(/\\"/g, '"')
@@ -304,8 +427,8 @@ const MedicalResearchGini = () => {
         logger.debug('Escaped characters processed');
       }
 
-      // Validate content
-      if (!finalHtml || finalHtml.trim().length < 5) {
+      // Validate content (except React component markers)
+      if (!finalHtml || (finalHtml.trim().length < 5 && !finalHtml.includes('__MOLECULAR_REACT_COMPONENT__'))) {
         logger.warn('Response content too short or empty', finalHtml);
         if (isImageWebhook) {
           return `<div style="padding: 12px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 6px; color: #dc2626;">
@@ -321,24 +444,27 @@ const MedicalResearchGini = () => {
         }
       }
 
-      // Clean up and format
-      const cleanedHtml = finalHtml
-        .replace(/^<!DOCTYPE[^>]*>/i, '')
-        .replace(/^<html[^>]*>|<\/html>$/gi, '')
-        .replace(/<head>.*?<\/head>/gis, '')
-        .replace(/^<body[^>]*>|<\/body>$/gi, '')
-        .trim();
+      // Clean up and format (but not React component markers)
+      if (!finalHtml.includes('__MOLECULAR_REACT_COMPONENT__')) {
+        const cleanedHtml = finalHtml
+          .replace(/^<!DOCTYPE[^>]*>/i, '')
+          .replace(/^<html[^>]*>|<\/html>$/gi, '')
+          .replace(/<head>.*?<\/head>/gis, '')
+          .replace(/^<body[^>]*>|<\/body>$/gi, '')
+          .trim();
 
-      const processedHtml = cleanSpecialCharacters(cleanedHtml);
-      const formattedHtml = formatHTMLContent(processedHtml);
+        const processedHtml = cleanSpecialCharacters(cleanedHtml);
+        finalHtml = formatHTMLContent(processedHtml);
+      }
 
       logger.info(`${webhookType} processing completed`, {
-        length: formattedHtml.length,
-        hasImages: formattedHtml.includes('<img'),
-        hasMolecularStructure: formattedHtml.includes('molecular-structure-display')
+        length: finalHtml.length,
+        hasImages: finalHtml.includes('<img'),
+        hasMolecularStructure: finalHtml.includes('molecular-structure-display'),
+        hasReactComponent: finalHtml.includes('__MOLECULAR_REACT_COMPONENT__')
       });
 
-      return formattedHtml;
+      return finalHtml;
 
     } catch (error) {
       logger.error(`Critical error processing ${webhookType} response`, error);
@@ -353,7 +479,7 @@ const MedicalResearchGini = () => {
     }
   };
 
-  // Message Rendering
+  // Message Rendering with React Component Support
   const isHTMLContent = (content) => /<[a-z][\s\S]*>/i.test(content);
 
   const htmlToPlainText = (html) => {
@@ -376,7 +502,30 @@ const MedicalResearchGini = () => {
 
   const renderMessageContent = (message) => {
     if (message.isHTML && message.type === 'bot') {
-      const cleanedContent = cleanSpecialCharacters(message.content);
+      const content = message.content;
+      
+      // Check for React component marker
+      if (content.includes('__MOLECULAR_REACT_COMPONENT__')) {
+        const componentMatch = content.match(/__MOLECULAR_REACT_COMPONENT__(.*?)__END_MOLECULAR_REACT_COMPONENT__/);
+        if (componentMatch) {
+          try {
+            const imageData = JSON.parse(componentMatch[1]);
+            logger.image('Rendering React component for molecular structure', { compound: imageData.metadata?.compound });
+            return <MolecularImage imageData={imageData} />;
+          } catch (e) {
+            logger.error('Failed to parse React component data', e);
+            return (
+              <div style={{ padding: '12px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '6px', color: '#dc2626' }}>
+                <strong>Component Rendering Error</strong><br/>
+                <p>Failed to render molecular structure component</p>
+              </div>
+            );
+          }
+        }
+      }
+      
+      // Regular HTML content
+      const cleanedContent = cleanSpecialCharacters(content);
       const formattedContent = formatHTMLContent(cleanedContent);
       
       return (
@@ -567,7 +716,7 @@ const MedicalResearchGini = () => {
 
           if (imageResponse.ok) {
             const imageContent = await processResponse(imageResponse, true);
-            logger.image('Image content processed successfully', { length: imageContent.length });
+            logger.image('Image content processed successfully', { length: imageContent.length, hasReactComponent: imageContent.includes('__MOLECULAR_REACT_COMPONENT__') });
 
             // Remove loading message and add image as separate message
             setMessages(prev => {
@@ -998,10 +1147,10 @@ End of Drug Discovery Session
             </svg>
             <div>
               <h1 className="text-xl font-bold text-white">DrugDiscovery AI Enhanced</h1>
-              <p className="text-sm text-blue-100">PharmaTech Innovations • Enhanced Logging & Debugging</p>
+              <p className="text-sm text-blue-100">PharmaTech Innovations • React Component Integration</p>
               <div className="flex items-center space-x-2 mt-1">
                 <Beaker className="w-3 h-3 text-blue-300" />
-                <span className="text-xs text-blue-300">Progressive Loading</span>
+                <span className="text-xs text-blue-300">Native React Images</span>
                 <Atom className="w-3 h-3 text-blue-300" />
                 <span className="text-xs text-blue-300">Molecular Structures</span>
               </div>
@@ -1251,7 +1400,7 @@ End of Drug Discovery Session
         <div className="mt-2 text-xs text-gray-500 text-center">
           <span>Connected to PharmaTech Discovery Systems</span>
           <span className="mx-2">•</span>
-          <span>Enhanced Logging & Debug Mode Enabled</span>
+          <span>React Component Integration Enabled</span>
           <br />
           <span className="text-xs text-gray-400">
             Text: Chatbot_text | Image: Chatbot_image | Session: {getSessionId().split('_')[1]}
@@ -1307,7 +1456,7 @@ const DetailedFeedbackModal = ({ isOpen, messageContent, onClose, onSubmit }) =>
 
   if (!isOpen) return null;
 
-  const hasImages = messageContent.includes('<img') || messageContent.includes('molecular-structure-display');
+  const hasImages = messageContent.includes('<img') || messageContent.includes('molecular-structure-display') || messageContent.includes('__MOLECULAR_REACT_COMPONENT__');
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
