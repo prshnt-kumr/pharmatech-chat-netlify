@@ -208,6 +208,27 @@ const MedicalResearchGini = () => {
               const firstItem = jsonData[0];
               console.log('First item keys:', Object.keys(firstItem));
               
+              // Enhanced: Check for N8n enhanced metadata
+              if (firstItem.frontendHints) {
+                console.log('🎯 Found enhanced N8n response with frontend hints');
+                console.log('Content type:', firstItem.contentType);
+                console.log('Has images:', firstItem.hasImages);
+                console.log('Skip sanitization:', firstItem.frontendHints.skipSanitization);
+                console.log('Image count:', firstItem.imageCount);
+                
+                // Use the metadata to guide processing
+                if (firstItem.frontendHints.skipSanitization) {
+                  console.log('⚠️ Skipping sanitization as requested by N8n metadata');
+                }
+                
+                if (firstItem.imageDetails && firstItem.imageDetails.length > 0) {
+                  console.log('📸 Image details from N8n:');
+                  firstItem.imageDetails.forEach((img, idx) => {
+                    console.log(`  Image ${idx + 1}: ${img.format}, length: ${img.base64Length}, valid: ${img.isValidBase64}`);
+                  });
+                }
+              }
+              
               finalHtml = firstItem.output || 
                          firstItem.response || 
                          firstItem.content || 
@@ -219,6 +240,14 @@ const MedicalResearchGini = () => {
             }
           } else if (typeof jsonData === 'object') {
             console.log('Processing JSON object with keys:', Object.keys(jsonData));
+            
+            // Enhanced: Check for N8n enhanced metadata in object format
+            if (jsonData.frontendHints) {
+              console.log('🎯 Found enhanced N8n response (object format)');
+              console.log('Content type:', jsonData.contentType);
+              console.log('Has images:', jsonData.hasImages);
+            }
+            
             finalHtml = jsonData.output || 
                        jsonData.response || 
                        jsonData.content || 
@@ -484,14 +513,21 @@ const MedicalResearchGini = () => {
       console.log('Sending request to:', N8N_WEBHOOK_URL);
       console.log('Request data:', messageData);
 
+      console.log('Attempting to fetch from URL:', N8N_WEBHOOK_URL);
+      
       const response = await fetch(N8N_WEBHOOK_URL, {
         method: 'POST',
+        mode: 'cors',
         headers: {
           'Content-Type': 'application/json',
-          'Accept': 'text/html, application/json, text/plain, */*'
+          'Accept': 'application/json, text/html, text/plain, */*',
+          'Origin': window.location.origin
         },
         body: JSON.stringify(messageData)
       });
+      
+      console.log('Response URL:', response.url);
+      console.log('Response redirected:', response.redirected);
 
       console.log('Response received:', {
         status: response.status,
