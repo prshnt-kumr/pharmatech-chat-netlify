@@ -65,31 +65,59 @@ const MedicalResearchGini = () => {
   const cleanSpecialCharacters = (text) => {
     if (!text || typeof text !== 'string') return text;
     
+    // CRITICAL: Skip processing if text contains base64 images
+    if (text.includes('data:image/') && text.includes('base64,')) {
+      console.log('⚠️ Skipping cleanSpecialCharacters - contains base64 images');
+      return text
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.*?)\*/g, '<em>$1</em>')
+        .replace(/#{1,6}\s+(.*?)(?:\n|$)/g, '<h3>$1</h3>')
+        .replace(/^[\s]*[-*+]\s+/gm, '• ')
+        .replace(/\\n/g, '<br>')
+        .replace(/\\t/g, '&nbsp;&nbsp;&nbsp;&nbsp;')
+        .replace(/\\"/g, '"')
+        .replace(/\\'/g, "'")
+        .trim();
+    }
+    
     return text
+      // Basic markdown formatting
       .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
       .replace(/\*(.*?)\*/g, '<em>$1</em>')
       .replace(/#{1,6}\s+(.*?)(?:\n|$)/g, '<h3>$1</h3>')
+      
+      // Clean bullet points and lists
       .replace(/^[\s]*[-*+]\s+/gm, '• ')
       .replace(/^\s*\d+\.\s+/gm, (match, offset, string) => {
         const lineStart = string.lastIndexOf('\n', offset) + 1;
         const lineNum = string.substring(0, offset).split('\n').length;
         return `${lineNum}. `;
       })
+      
+      // Fix escape sequences
       .replace(/\\n/g, '<br>')
       .replace(/\\t/g, '&nbsp;&nbsp;&nbsp;&nbsp;')
       .replace(/\\"/g, '"')
       .replace(/\\'/g, "'")
+      
+      // Clean HTML entities
       .replace(/&nbsp;/g, ' ')
       .replace(/&quot;/g, '"')
       .replace(/&apos;/g, "'")
       .replace(/&lt;/g, '<')
       .replace(/&gt;/g, '>')
       .replace(/&amp;/g, '&')
+      
+      // Remove excessive whitespace
       .replace(/\n{3,}/g, '\n\n')
       .replace(/\s{3,}/g, ' ')
       .replace(/^\s+|\s+$/gm, '')
+      
+      // ONLY format chemical formulas in text content, NOT in base64 data
+      // This was corrupting base64 images
       .replace(/([A-Z][a-z]?)(\d+)/g, '$1<sub>$2</sub>')
       .replace(/\^(\d+)/g, '<sup>$1</sup>')
+      
       .trim();
   };
 
@@ -1301,14 +1329,14 @@ End of Drug Discovery Session
           </button>
         </div>
         
-        {/* Connection Status */}
+        {/* Enhanced Connection Status */}
         <div className="mt-2 text-xs text-gray-500 text-center">
           <span>Connected to PharmaTech Discovery Systems</span>
           <span className="mx-2">•</span>
-          <span>2D/3D Molecular Visualization Enabled</span>
+          <span>Dual Webhook Architecture Enabled</span>
           <br />
           <span className="text-xs text-gray-400">
-            Session: {getSessionId().split('_')[1]} | Enhanced Image Processing
+            Text: {TEXT_WEBHOOK_URL.split('/').pop()} | Image: {IMAGE_WEBHOOK_URL.split('/').pop()} | Session: {getSessionId().split('_')[1]}
           </span>
         </div>
       </div>
