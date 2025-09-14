@@ -1114,6 +1114,29 @@ End of Drug Discovery Session
               >
                 Text+3D
               </button>
+              {/* TEMPORARY TEST BUTTON */}
+              <button
+                onClick={() => {
+                  const testMessage = {
+                    id: Date.now(),
+                    type: 'bot',
+                    content: `<div style="padding: 20px; border: 2px solid #3b82f6; border-radius: 12px; background: white;">
+                      <h3>Test Image Rendering</h3>
+                      <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASwAAAEsCAMAAAE5pE7RAAACBFBMVEX19fX/AAAAAABmi4sYdM3NEHbv8PC9zMz+CwuMjIzS0tKvr59+nZ2wwsJpaWkjIyNGRkb07/L3tbX17e34oKD+AQH6bW313d3+AwP5jo6jo6Oqyefv8fTTNIr4lpb6aGiDg4NycnIQEBDl5eWTk5NiYmIhISHU1NRSUlIxMTHExMS0tLRBQUGfw+X17+/4lJT5kpL3sbH3r6/9GRn+ExP3s7P+FRX7WFj6dXX7UVH8Ozv8RUX15eX8SUn8Pz/21NT229v+CQn+Bwf8Njb6YmL8MjL4o6P9Kir5e3v4mpr5fX39MDD5hYX5gYH22dn6bGz22Nj6e3v6enpamtjhh7gwgtGKt+HRKYT24+P30ND3vLz4qqr5l5f6hIT08/TNzc1koNr08fPz6/DXS5d7e3uenp7BwcHk5OTc5vAZdc0eeM7s7/MzhNKcweSawOR8rt/OGnzcaKfQJYLuzd/aW6Dec63YT5nSLofNE3jRK4XlnMTVQpLuz+Doq8zYUpvorM3SLIbZWZ/OGXvw3ejfeLDOF3rh4eG4uLiPj496enogec5ootvH2uxKkdaDsuAugdGhxOWYv+Q6iNNDjdTT4e/Z5O/x8vSkxubj6vEsgNA5h9J7rd41hdKxzeiCseAies4dd83g6PErf9CHteEnfc+XvuM+itN3q97z8/S20OmdwuVtpdzRSNlAAAAACXBIWXMAAA7EAAAOxAGVKw4b" alt="Test Molecular Structure" style="max-width: 100%; height: auto; border-radius: 6px; background: white;" />
+                      <p>This is a test image to verify base64 rendering works.</p>
+                    </div>`,
+                    timestamp: new Date(),
+                    isHTML: true,
+                    hasImages: true,
+                    messageId: 'test_image'
+                  };
+                  setMessages(prev => [...prev, testMessage]);
+                }}
+                className="px-2 py-1 text-xs bg-red-100 text-red-600 rounded hover:bg-red-200 transition-colors"
+                title="Test Base64 Image Rendering"
+              >
+                TEST IMG
+              </button>
             </div>
           </div>
           <button
