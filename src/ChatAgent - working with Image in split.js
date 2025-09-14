@@ -342,30 +342,10 @@ const MedicalResearchGini = () => {
 
       let finalHtml = '';
 
-      // Handle JSON responses with robust parsing
+      // Handle JSON responses
       if (rawText.trim().startsWith('{') || rawText.trim().startsWith('[')) {
         try {
-          let jsonData;
-          try {
-            // First attempt: standard JSON parsing
-            jsonData = JSON.parse(rawText);
-          } catch (parseError) {
-            logger.warn('Standard JSON parsing failed, attempting recovery', parseError.message);
-            
-            // Second attempt: Fix common JSON issues from N8n
-            let fixedJson = rawText
-              // Fix unquoted property names like: data:image/png;base64,
-              .replace(/(\w+):image\/([^,\s}]+),/g, '"image_url":"data:image/$2,')
-              // Fix other unquoted properties
-              .replace(/(\w+):/g, '"$1":')
-              // Fix double quotes around already quoted strings
-              .replace(/""([^"]+)""/g, '"$1"');
-            
-            logger.debug('Attempting to parse fixed JSON', { original: rawText.substring(0, 100), fixed: fixedJson.substring(0, 100) });
-            jsonData = JSON.parse(fixedJson);
-            logger.info('Successfully recovered malformed JSON');
-          }
-          
+          const jsonData = JSON.parse(rawText);
           logger.debug(`Parsed JSON ${webhookType} data`, jsonData);
           
           if (Array.isArray(jsonData) && jsonData.length > 0) {
@@ -591,7 +571,7 @@ const MedicalResearchGini = () => {
     return true;
   };
 
-  // Main Send Message Function with Combined Response
+  // Main Send Message Function with Enhanced Error Handling
   const sendMessage = async () => {
     if (!inputMessage.trim() || isLoading) {
       logger.warn('Send message blocked', { empty: !inputMessage.trim(), loading: isLoading });
@@ -656,74 +636,70 @@ const MedicalResearchGini = () => {
       timestamp: new Date().toISOString()
     };
 
-    // Show processing indicator with different message based on image requirement
-    const processingMessageId = Date.now() + 1;
-    const processingMessage = {
-      id: processingMessageId,
-      type: 'bot',
-      content: imageRequirement.needsImage ? 
-        `<div style="padding: 12px; background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%); border: 2px solid #3b82f6; border-radius: 12px; text-align: center; margin: 10px 0;">
-          <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
-            <div style="width: 16px; height: 16px; border: 2px solid #3b82f6; border-top: 2px solid transparent; border-radius: 50%; animation: spin 1s linear infinite;"></div>
-            <span style="color: #1e40af; font-weight: 600;">Processing your request and generating molecular structure for ${imageRequirement.compound}...</span>
-          </div>
-          <p style="color: #64748b; font-size: 12px; margin: 8px 0 0 0;">This may take a moment as we prepare both text and visual content</p>
-        </div>` :
-        `<div style="padding: 12px; background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%); border: 2px solid #3b82f6; border-radius: 12px; text-align: center; margin: 10px 0;">
-          <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
-            <div style="width: 16px; height: 16px; border: 2px solid #3b82f6; border-top: 2px solid transparent; border-radius: 50%; animation: spin 1s linear infinite;"></div>
-            <span style="color: #1e40af; font-weight: 600;">Dr. Gini is processing your request...</span>
-          </div>
-        </div>`,
-      timestamp: new Date(),
-      isHTML: true,
-      isProcessing: true,
-      requestId: requestId
-    };
-
-    setMessages(prev => [...prev, processingMessage]);
-
-    logger.info('Starting combined request processing', { requestId, imageRequired: imageRequirement.needsImage });
+    logger.info('Starting dual webhook requests', { requestId, imageRequired: imageRequirement.needsImage });
 
     try {
-      let textContent = '';
-      let imageContent = '';
-      let textError = null;
-      let imageError = null;
-
-      // STEP 1: Always get text response
+      // STEP 1: Get text response (always)
       logger.info('Fetching text response', { url: TEXT_WEBHOOK_URL });
       
-      try {
-        const textResponse = await fetch(TEXT_WEBHOOK_URL, {
-          method: 'POST',
-          mode: 'cors',
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json, text/html, text/plain, */*'
-          },
-          body: JSON.stringify(messageData)
-        });
+      const textResponse = await fetch(TEXT_WEBHOOK_URL, {
+        method: 'POST',
+        mode: 'cors',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json, text/html, text/plain, */*'
+        },
+        body: JSON.stringify(messageData)
+      });
 
-        if (!textResponse.ok) {
-          throw new Error(`Text webhook error: ${textResponse.status} - ${textResponse.statusText}`);
-        }
-
-        textContent = await processResponse(textResponse, false);
-        logger.info('Text content processed successfully', { length: textContent.length });
-      } catch (error) {
-        logger.error('Text request failed', error);
-        textError = error;
-        textContent = `<div style="color: #dc2626; background: #fef2f2; padding: 12px; border-radius: 6px; margin-bottom: 16px;">
-          <strong>Text Response Error</strong><br/>
-          <p>Unable to process text response: ${error.message}</p>
-        </div>`;
+      if (!textResponse.ok) {
+        throw new Error(`Text webhook error: ${textResponse.status} - ${textResponse.statusText}`);
       }
+
+      const textContent = await processResponse(textResponse, false);
+      logger.info('Text content processed successfully', { length: textContent.length });
+
+      // Create bot message with text content
+      const initialBotMessageId = Date.now() + 1;
+      const textBotMessage = {
+        id: initialBotMessageId,
+        type: 'bot',
+        content: textContent,
+        timestamp: new Date(),
+        isHTML: true,
+        messageId: generateMessageId('gini'),
+        hasImages: false,
+        isPartial: imageRequirement.needsImage,
+        requestId: requestId
+      };
+
+      setMessages(prev => [...prev, textBotMessage]);
+      setIsLoading(false);
 
       // STEP 2: Get image if needed
       if (imageRequirement.needsImage) {
         logger.image('Starting image request', { compound: imageRequirement.compound, url: IMAGE_WEBHOOK_URL });
         
+        // Show loading indicator
+        const loadingMessageId = Date.now() + 2;
+        const imageLoadingMessage = {
+          id: loadingMessageId,
+          type: 'bot',
+          content: `<div style="padding: 12px; background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%); border: 2px solid #3b82f6; border-radius: 12px; text-align: center; margin: 10px 0;">
+            <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
+              <div style="width: 16px; height: 16px; border: 2px solid #3b82f6; border-top: 2px solid transparent; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+              <span style="color: #1e40af; font-weight: 600;">Generating molecular structure for ${imageRequirement.compound}...</span>
+            </div>
+            <p style="color: #64748b; font-size: 12px; margin: 8px 0 0 0;">This may take a moment</p>
+          </div>`,
+          timestamp: new Date(),
+          isHTML: true,
+          isImageLoading: true,
+          requestId: requestId
+        };
+
+        setMessages(prev => [...prev, imageLoadingMessage]);
+
         try {
           const imageResponse = await fetch(IMAGE_WEBHOOK_URL, {
             method: 'POST',
@@ -739,97 +715,90 @@ const MedicalResearchGini = () => {
           });
 
           if (imageResponse.ok) {
-            imageContent = await processResponse(imageResponse, true);
-            logger.image('Image content processed successfully', { 
-              length: imageContent.length, 
-              hasReactComponent: imageContent.includes('__MOLECULAR_REACT_COMPONENT__') 
+            const imageContent = await processResponse(imageResponse, true);
+            logger.image('Image content processed successfully', { length: imageContent.length, hasReactComponent: imageContent.includes('__MOLECULAR_REACT_COMPONENT__') });
+
+            // Remove loading message and add image as separate message
+            setMessages(prev => {
+              const messagesWithoutLoading = prev.filter(msg => msg.id !== loadingMessageId);
+              
+              const imageMessage = {
+                id: Date.now() + 3,
+                type: 'bot',
+                content: imageContent,
+                timestamp: new Date(),
+                isHTML: true,
+                hasImages: true,
+                messageId: generateMessageId('gini_image'),
+                requestId: requestId
+              };
+              
+              return [...messagesWithoutLoading, imageMessage];
             });
+
+            // Mark original text message as having associated images
+            setMessages(prev => prev.map(msg => 
+              msg.id === initialBotMessageId ? { ...msg, hasImages: true } : msg
+            ));
+
+            logger.image('Image message displayed successfully');
           } else {
             throw new Error(`Image webhook error: ${imageResponse.status} - ${imageResponse.statusText}`);
           }
-        } catch (error) {
-          logger.error('Image request failed', error);
-          imageError = error;
-          imageContent = `<div style="padding: 12px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 6px; color: #dc2626; margin-top: 16px;">
-            <strong>Molecular Structure Unavailable</strong><br/>
-            <p style="margin: 8px 0 0 0; font-size: 14px;">Unable to generate molecular structure: ${error.message}</p>
-          </div>`;
+        } catch (imageError) {
+          logger.error('Image request failed', imageError);
+          
+          // Replace loading message with error message
+          setMessages(prev => prev.map(msg => 
+            msg.id === loadingMessageId ? {
+              ...msg,
+              content: `<div style="padding: 12px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 6px; color: #dc2626;">
+                <strong>Molecular Structure Unavailable</strong><br/>
+                <p style="margin: 8px 0 0 0; font-size: 14px;">Unable to generate molecular structure: ${imageError.message}</p>
+                <details style="margin-top: 8px;">
+                  <summary style="cursor: pointer; font-size: 12px;">Error Details</summary>
+                  <pre style="font-size: 10px; margin: 4px 0; white-space: pre-wrap;">${imageError.stack || imageError.toString()}</pre>
+                </details>
+              </div>`,
+              isImageLoading: false,
+              isImageError: true
+            } : msg
+          ));
         }
       }
 
-      // STEP 3: Combine content
-      let combinedContent = textContent;
-      
-      if (imageRequirement.needsImage && imageContent) {
-        // Add spacing between text and image content
-        const spacing = '<div style="margin: 20px 0;"></div>';
-        combinedContent = textContent + spacing + imageContent;
-      }
-
-      // STEP 4: Create final combined message
-      const finalBotMessage = {
-        id: Date.now() + 2,
-        type: 'bot',
-        content: combinedContent,
-        timestamp: new Date(),
-        isHTML: true,
-        messageId: generateMessageId('gini_combined'),
-        hasImages: imageRequirement.needsImage && !imageError,
-        isCombined: imageRequirement.needsImage,
-        hasTextError: !!textError,
-        hasImageError: !!imageError,
-        requestId: requestId
-      };
-
-      // Replace processing message with final combined message
-      setMessages(prev => prev.map(msg => 
-        msg.id === processingMessageId ? finalBotMessage : msg
-      ));
-
-      logger.info('Combined message created successfully', { 
-        hasText: !!textContent, 
-        hasImage: !!imageContent,
-        textError: !!textError,
-        imageError: !!imageError,
-        combined: imageRequirement.needsImage
-      });
-
-    } catch (criticalError) {
-      logger.error('Critical error in combined processing', criticalError);
+    } catch (textError) {
+      logger.error('Text request failed', textError);
       
       let errorMessage = 'Sorry, I\'m having trouble processing your request. ';
-      if (criticalError.message.includes('404')) {
+      if (textError.message.includes('404')) {
         errorMessage += 'The service is temporarily unavailable.';
-      } else if (criticalError.message.includes('500')) {
+      } else if (textError.message.includes('500')) {
         errorMessage += 'There was a server error. Please try again.';
       } else {
         errorMessage += 'Please check your connection and try again.';
       }
 
       const errorMsg = {
-        id: Date.now() + 3,
+        id: Date.now() + 1,
         type: 'bot',
         content: `<div style="color: #dc2626; background: #fef2f2; padding: 12px; border-radius: 6px;">
           <strong>Connection Error</strong><br/>
           <p>${errorMessage}</p>
           <details style="margin-top: 8px;">
             <summary style="cursor: pointer; font-size: 12px;">Technical Details</summary>
-            <pre style="font-size: 10px; margin: 4px 0; white-space: pre-wrap;">${criticalError.stack || criticalError.toString()}</pre>
+            <pre style="font-size: 10px; margin: 4px 0; white-space: pre-wrap;">${textError.stack || textError.toString()}</pre>
           </details>
         </div>`,
         timestamp: new Date(),
         isError: true,
         isHTML: true
       };
-
-      // Replace processing message with error message
-      setMessages(prev => prev.map(msg => 
-        msg.id === processingMessageId ? errorMsg : msg
-      ));
+      setMessages(prev => [...prev, errorMsg]);
     } finally {
       window.requestInProgress = false;
       setIsLoading(false);
-      logger.info('Combined message processing completed', { requestId });
+      logger.info('Message processing completed', { requestId });
     }
   };
 
