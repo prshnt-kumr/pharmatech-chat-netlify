@@ -274,6 +274,22 @@ const MedicalResearchGini = () => {
       // Debug images if present
       if (cleanedHtml.includes('<img')) {
         debugImageDisplay(cleanedHtml);
+        
+        // Additional check: verify img src attributes
+        const imgMatches = cleanedHtml.match(/<img[^>]*src="[^"]*"[^>]*>/gi);
+        if (imgMatches) {
+          imgMatches.forEach((img, index) => {
+            const srcMatch = img.match(/src="([^"]*)"/);
+            if (srcMatch) {
+              const srcValue = srcMatch[1];
+              console.log(`Image ${index + 1} src type:`, 
+                srcValue.startsWith('data:image/') ? 'Base64 Data URI' : 
+                srcValue.startsWith('http') ? 'HTTP URL' : 
+                srcValue === '' ? 'Empty src' : 'Other');
+              console.log(`Image ${index + 1} src preview:`, srcValue.substring(0, 80) + '...');
+            }
+          });
+        }
       }
 
       console.log('FINAL PROCESSED HTML:');
