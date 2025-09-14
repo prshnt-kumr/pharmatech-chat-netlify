@@ -213,6 +213,7 @@ const MedicalResearchGini = () => {
                        jsonData.safeResponse ||
                        jsonData.text ||
                        jsonData.data ||
+                       jsonData.molecular_html || // ← Add this for image webhook
                        JSON.stringify(jsonData, null, 2);
           }
         } catch (jsonError) {
