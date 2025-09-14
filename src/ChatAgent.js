@@ -160,7 +160,14 @@ const MedicalResearchGini = () => {
 
       let finalHtml = '';
 
-      if (rawText.includes('<iframe') && rawText.includes('srcdoc=')) {
+      // Check if response is direct HTML (like your N8n webhook returns)
+      if (rawText.includes('<div class="molecular-structure-display"') || 
+          rawText.includes('<img') || 
+          rawText.includes('<p><strong>')) {
+        console.log('Processing direct HTML format from N8n');
+        finalHtml = rawText;
+      }
+      else if (rawText.includes('<iframe') && rawText.includes('srcdoc=')) {
         console.log('Processing iframe wrapped HTML');
         
         let iframeMatch = rawText.match(/<iframe[^>]*srcdoc="([^"]*(?:\\"[^"]*)*)"[^>]*>/is);
@@ -223,7 +230,8 @@ const MedicalResearchGini = () => {
           }
         } catch (jsonError) {
           console.log('JSON parsing failed:', jsonError.message);
-          finalHtml = `<p>${rawText}</p>`;
+          console.log('Treating as plain text/HTML instead');
+          finalHtml = rawText;
         }
       }
       else if (rawText.includes('<h2>') || rawText.includes('<h3>') || rawText.includes('<p>') || rawText.includes('<div')) {
@@ -259,7 +267,7 @@ const MedicalResearchGini = () => {
         </div>`;
       }
 
-      // Final cleanup
+      // Enhanced final cleanup - but preserve base64 images
       const preliminaryClean = finalHtml
         .replace(/^<!DOCTYPE[^>]*>/i, '')
         .replace(/^<html[^>]*>/i, '')
@@ -269,6 +277,7 @@ const MedicalResearchGini = () => {
         .replace(/<\/body>$/i, '')
         .trim();
 
+      // Use enhanced cleaning that preserves images
       const cleanedHtml = cleanSpecialCharacters(preliminaryClean);
 
       // Debug images if present
@@ -296,6 +305,7 @@ const MedicalResearchGini = () => {
       console.log('   Length:', cleanedHtml.length);
       console.log('   Contains molecular structure:', cleanedHtml.includes('molecular-structure-display'));
       console.log('   Contains image:', cleanedHtml.includes('<img'));
+      console.log('   Contains base64:', cleanedHtml.includes('data:image/'));
       
       return cleanedHtml;
 
