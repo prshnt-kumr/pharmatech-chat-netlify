@@ -1,4 +1,4 @@
-﻿import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Send, Download, FileText, FileSpreadsheet, User, Loader2, ThumbsUp, ThumbsDown, MessageSquare, X, Star, Clock, Image, Beaker, Atom } from 'lucide-react';
 
 // Molecular Structure React Component
@@ -1126,15 +1126,15 @@ End of Drug Discovery Session
     scrollToBottom();
   }, [messages]);
 
-  useEffect(() => {
-    // Enhanced CSP setup
-    if (!document.querySelector('meta[http-equiv="Content-Security-Policy"]')) {
-      const cspMeta = document.createElement('meta');
-      cspMeta.setAttribute('http-equiv', 'Content-Security-Policy');
-      cspMeta.setAttribute('content', "img-src 'self' data: blob: https: 'unsafe-inline'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';");
-      document.head.appendChild(cspMeta);
-      logger.info('Enhanced CSP meta tag added for image support');
-    }
+    useEffect(() => {
+        // Enhanced CSP setup
+        if (!document.querySelector('meta[http-equiv="Content-Security-Policy"]')) {
+            const cspMeta = document.createElement('meta');
+            cspMeta.setAttribute('http-equiv', 'Content-Security-Policy');
+            cspMeta.setAttribute('content', "img-src 'self' data: blob: https: 'unsafe-inline'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';");
+            document.head.appendChild(cspMeta);
+            console.log('Enhanced CSP meta tag added for image support'); // Change logger.info to console.log
+        }
 
     const style = document.createElement('style');
     style.textContent = `
