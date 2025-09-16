@@ -942,7 +942,7 @@ const MedicalResearchGini = () => {
     }
   };
 
-  // Feedback Functions
+  // FIXED Feedback Functions with all fields included
   const handleQuickFeedback = async (messageId, rating) => {
     try {
       const feedback = {
@@ -951,10 +951,18 @@ const MedicalResearchGini = () => {
         thumbsRating: rating,
         feedbackType: 'quick',
         timestamp: new Date().toISOString(),
-        userId: `user_${Date.now()}`
+        userId: `user_${Date.now()}`,
+        // Add null/empty values for ALL fields to prevent JSON parsing errors in N8n
+        rating: null,
+        accuracyRating: null,
+        helpfulnessRating: null,
+        visualQuality: null,
+        comment: '',
+        userExpertise: '',
+        improvementSuggestions: ''
       };
 
-      logger.info('Sending quick feedback', { messageId, rating });
+      logger.info('Sending quick feedback with all fields', { messageId, rating, feedbackData: feedback });
 
       const response = await fetch(FEEDBACK_WEBHOOK_URL, {
         method: 'POST',
@@ -968,6 +976,14 @@ const MedicalResearchGini = () => {
           [messageId]: { ...prev[messageId], thumbs: rating }
         }));
         logger.info('Quick feedback sent successfully');
+      } else {
+        // Enhanced error handling
+        const errorText = await response.text();
+        logger.error('Feedback submission failed', { 
+          status: response.status, 
+          statusText: response.statusText,
+          error: errorText 
+        });
       }
     } catch (error) {
       logger.error('Error sending quick feedback', error);
@@ -985,16 +1001,29 @@ const MedicalResearchGini = () => {
 
   const submitDetailedFeedback = async (feedbackData) => {
     try {
+      // Ensure all fields are included with proper defaults
       const feedback = {
         messageId: feedbackModal.messageId,
         sessionId: getSessionId(),
-        ...feedbackData,
         feedbackType: 'detailed',
         timestamp: new Date().toISOString(),
-        userId: `user_${Date.now()}`
+        userId: `user_${Date.now()}`,
+        // Include all rating fields with values or null
+        rating: feedbackData.rating || null,
+        thumbsRating: feedbackData.thumbsRating || '',
+        accuracyRating: feedbackData.accuracyRating || null,
+        helpfulnessRating: feedbackData.helpfulnessRating || null,
+        visualQuality: feedbackData.visualQuality || null,
+        // Include text fields with empty string defaults
+        comment: feedbackData.comment || '',
+        userExpertise: feedbackData.userExpertise || 'intermediate',
+        improvementSuggestions: feedbackData.improvementSuggestions || ''
       };
 
-      logger.info('Sending detailed feedback', { messageId: feedbackModal.messageId });
+      logger.info('Sending detailed feedback with all fields', { 
+        messageId: feedbackModal.messageId, 
+        feedbackData: feedback 
+      });
 
       const response = await fetch(FEEDBACK_WEBHOOK_URL, {
         method: 'POST',
@@ -1013,6 +1042,12 @@ const MedicalResearchGini = () => {
         }));
         setFeedbackModal({ open: false, messageId: null, messageContent: '' });
         logger.info('Detailed feedback sent successfully');
+      } else {
+        const errorText = await response.text();
+        logger.error('Detailed feedback submission failed', { 
+          status: response.status, 
+          error: errorText 
+        });
       }
     } catch (error) {
       logger.error('Error sending detailed feedback', error);
@@ -1126,15 +1161,15 @@ End of Drug Discovery Session
     scrollToBottom();
   }, [messages]);
 
-    useEffect(() => {
-        // Enhanced CSP setup
-        if (!document.querySelector('meta[http-equiv="Content-Security-Policy"]')) {
-            const cspMeta = document.createElement('meta');
-            cspMeta.setAttribute('http-equiv', 'Content-Security-Policy');
-            cspMeta.setAttribute('content', "img-src 'self' data: blob: https: 'unsafe-inline'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';");
-            document.head.appendChild(cspMeta);
-            console.log('Enhanced CSP meta tag added for image support'); // Change logger.info to console.log
-        }
+  useEffect(() => {
+    // Enhanced CSP setup
+    if (!document.querySelector('meta[http-equiv="Content-Security-Policy"]')) {
+      const cspMeta = document.createElement('meta');
+      cspMeta.setAttribute('http-equiv', 'Content-Security-Policy');
+      cspMeta.setAttribute('content', "img-src 'self' data: blob: https: 'unsafe-inline'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';");
+      document.head.appendChild(cspMeta);
+      console.log('Enhanced CSP meta tag added for image support');
+    }
 
     const style = document.createElement('style');
     style.textContent = `
